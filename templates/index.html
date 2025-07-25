@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Media Compressor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; }
+        input[type="text"] { width: 300px; padding: 5px; }
+        button { padding: 10px 15px; background: #007cba; color: white; border: none; cursor: pointer; margin-right: 10px; }
+        button:hover { background: #005a87; }
+        button.clear-btn { background: #dc3545; }
+        button.clear-btn:hover { background: #c82333; }
+        #file-list { list-style-type: none; padding: 0; }
+        #file-list li { padding: 10px; margin: 5px 0; border: 1px solid #ddd; border-radius: 4px; }
+        .status-processing { background-color: #fff3cd; border-color: #ffeaa7; }
+        .status-completed { background-color: #d4edda; border-color: #c3e6cb; }
+        .status-error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .progress-bar { width: 100%; background-color: #f0f0f0; border-radius: 4px; overflow: hidden; margin-top: 5px; }
+        .progress-fill { height: 20px; background-color: #007cba; width: 0%; transition: width 0.3s; }
+        .status-text { margin-top: 5px; font-weight: bold; }
+        .queue-stats { 
+            background: #f8f9fa; 
+            padding: 15px; 
+            border-radius: 5px; 
+            margin-bottom: 20px;
+            border: 1px solid #dee2e6;
+        }
+        .stat-item { 
+            display: inline-block; 
+            margin-right: 20px; 
+            padding: 5px 10px; 
+            background: white; 
+            border-radius: 3px; 
+            border: 1px solid #dee2e6;
+        }
+        .stat-number { font-weight: bold; color: #007cba; }
+        .stat-label { font-size: 0.9em; color: #6c757d; }
+    </style>
+</head>
+<body>
+    <h2>Media Compressor</h2>
+    
+    <form id="folder-form">
+        <div class="form-group">
+            <label>Input Folder Path:</label>
+            <input type="text" id="inputFolderPath" name="inputFolderPath" required placeholder="/path/to/input/folder">
+        </div>
+        <div class="form-group">
+            <label>Output Folder Path:</label>
+            <input type="text" id="outputFolderPath" name="outputFolderPath" required placeholder="/path/to/output/folder">
+        </div>
+        <button type="submit">Add Folder for Compression</button>
+    </form>
+
+    <div id="status-message"></div>
+    
+    <div class="queue-stats">
+        <h3>Queue Statistics</h3>
+        <div id="queue-counts">
+            <div class="stat-item">
+                <span class="stat-number" id="total-count">0</span>
+                <div class="stat-label">Total</div>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number" id="pending-count">0</span>
+                <div class="stat-label">Pending</div>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number" id="processing-count">0</span>
+                <div class="stat-label">Processing</div>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number" id="completed-count">0</span>
+                <div class="stat-label">Completed</div>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number" id="error-count">0</span>
+                <div class="stat-label">Errors</div>
+            </div>
+        </div>
+        <button class="clear-btn" id="clear-completed-btn">Clear Completed Files</button>
+    </div>
+    
+    <h3>Compression Queue:</h3>
+    <ul id="file-list"></ul>
+
+    <script>
+        const socket = io();
+        
+        // Handle form submission
+        document.getElementById('folder-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            fetch('/folder', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('status-message').innerHTML = 
+                    '<p style="color: green;">' + data.message + '</p>';
+                loadFiles(); // Refresh file list
+            })
+            .catch(error => {
+                document.getElementById('status-message').innerHTML = 
+                    '<p style="color: red;">Error: ' + error + '</p>';
+            });
+        });
+        
+        // Handle clear completed files
+        document.getElementById('clear-completed-btn').addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            if (confirm('Are you sure you want to clear all completed files from the database?')) {
+                fetch('/clear_completed', {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('status-message').innerHTML = 
+                        '<p style="color: green;">' + data.message + '</p>';
+                    loadFiles(); // Refresh file list
+                })
+                .catch(error => {
+                    document.getElementById('status-message').innerHTML = 
+                        '<p style="color: red;">Error: ' + error + '</p>';
+                });
+            }
+        });
+        
+        // Load files from server
+        function loadFiles() {
+            fetch('/files')
+                .then(response => response.json())
+                .then(files => {
+                    const fileList = document.getElementById('file-list');
+                    fileList.innerHTML = '';
+                    
+                    files.forEach(file => {
+                        const li = document.createElement('li');
+                        li.id = 'file-' + file[0];
+                        
+                        // Create all necessary elements
+                        const fileHeader = document.createElement('div');
+                        fileHeader.innerHTML = `<strong>${escapeHtml(file[1])}</strong>`;
+                        
+                        const fileOutput = document.createElement('div');
+                        fileOutput.innerHTML = `<small>→ ${escapeHtml(file[2])}</small>`;
+                        
+                        const progressBarContainer = document.createElement('div');
+                        progressBarContainer.className = 'progress-bar';
+                        
+                        const progressFill = document.createElement('div');
+                        progressFill.className = 'progress-fill';
+                        progressFill.id = 'progress-' + file[0];
+                        progressBarContainer.appendChild(progressFill);
+                        
+                        const statusText = document.createElement('div');
+                        statusText.className = 'status-text';
+                        statusText.id = 'status-' + file[0];
+                        statusText.textContent = 'Status: ' + getStatusText(file[3]);
+                        
+                        // Append all elements to list item
+                        li.appendChild(fileHeader);
+                        li.appendChild(fileOutput);
+                        li.appendChild(progressBarContainer);
+                        li.appendChild(statusText);
+                        
+                        updateFileStatus(li, file[0], file[3]);
+                        fileList.appendChild(li);
+                    });
+                })
+                .catch(error => {
+                    console.error('Error loading files:', error);
+                });
+        }
+        
+        // Get status text based on compressed value
+        function getStatusText(status) {
+            switch(parseInt(status)) {
+                case 1: return 'Completed';
+                case -1: return 'Error';
+                case 2: return 'Processing';
+                case 0: return 'Pending';
+                default: return 'Unknown';
+            }
+        }
+        
+        // Update file status in UI
+        function updateFileStatus(element, fileId, status) {
+            element.className = '';
+            const statusElement = document.getElementById(`status-${fileId}`);
+            const progressFill = document.getElementById(`progress-${fileId}`);
+            
+            // Check if elements exist before trying to update them
+            if (!statusElement || !progressFill) {
+                console.warn('UI elements not found for file ID:', fileId);
+                return;
+            }
+            
+            switch(parseInt(status)) {
+                case 1: // Completed
+                    element.classList.add('status-completed');
+                    statusElement.textContent = 'Status: Completed';
+                    progressFill.style.width = '100%';
+                    progressFill.style.backgroundColor = '#28a745';
+                    break;
+                case -1: // Error
+                    element.classList.add('status-error');
+                    statusElement.textContent = 'Status: Error';
+                    progressFill.style.width = '100%';
+                    progressFill.style.backgroundColor = '#dc3545';
+                    break;
+                case 2: // Processing
+                    element.classList.add('status-processing');
+                    statusElement.textContent = 'Status: Processing';
+                    progressFill.style.width = '50%';
+                    progressFill.style.backgroundColor = '#007cba';
+                    break;
+                case 0: // Pending
+                default:
+                    element.classList.add('status-processing');
+                    statusElement.textContent = 'Status: Pending';
+                    progressFill.style.width = '0%';
+                    break;
+            }
+        }
+        
+        // Update queue counts display
+        function updateQueueCounts(counts) {
+            document.getElementById('total-count').textContent = counts.total;
+            document.getElementById('pending-count').textContent = counts.pending;
+            document.getElementById('processing-count').textContent = counts.processing;
+            document.getElementById('completed-count').textContent = counts.completed;
+            document.getElementById('error-count').textContent = counts.errors;
+        }
+        
+        // Handle real-time progress updates
+        socket.on('progress_update', function(data) {
+            const fileElement = document.getElementById('file-' + data.file_id);
+            if (fileElement) {
+                const statusElement = document.getElementById(`status-${data.file_id}`);
+                const progressFill = document.getElementById(`progress-${data.file_id}`);
+                
+                // Check if elements exist
+                if (!statusElement || !progressFill) {
+                    console.warn('Progress UI elements not found for file ID:', data.file_id);
+                    return;
+                }
+                
+                fileElement.className = '';
+                switch(data.status) {
+                    case 'processing':
+                        fileElement.classList.add('status-processing');
+                        statusElement.textContent = 'Status: Processing - ' + data.message;
+                        progressFill.style.width = '50%';
+                        progressFill.style.backgroundColor = '#007cba';
+                        break;
+                    case 'completed':
+                        fileElement.classList.add('status-completed');
+                        statusElement.textContent = 'Status: Completed - ' + data.message;
+                        progressFill.style.width = '100%';
+                        progressFill.style.backgroundColor = '#28a745';
+                        break;
+                    case 'error':
+                        fileElement.classList.add('status-error');
+                        statusElement.textContent = 'Status: Error - ' + data.message;
+                        progressFill.style.width = '100%';
+                        progressFill.style.backgroundColor = '#dc3545';
+                        break;
+                }
+            } else {
+                // If file element doesn't exist, create it
+                console.log('File element not found, refreshing list');
+                loadFiles();
+            }
+        });
+        
+        // Handle queue counts updates
+        socket.on('queue_counts', function(counts) {
+            updateQueueCounts(counts);
+        });
+        
+        // Utility function to escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Initial load
+        loadFiles();
+        
+        // Request initial queue counts
+        socket.emit('request_queue_counts');
+        
+        // Handle connection status
+        socket.on('connection_status', function(data) {
+            console.log('Socket connection status:', data.status);
+        });
+        
+        // Handle disconnect
+        socket.on('disconnect', function() {
+            console.log('Socket disconnected');
+        });
+    </script>
+</body>
+</html>
