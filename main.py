@@ -8,6 +8,7 @@ import json
 import mimetypes
 from flask import Flask, request, jsonify, render_template
 from flask_socketio import SocketIO, emit
+from PIL import Image
 
 # Configure logger
 logging.basicConfig(
@@ -194,11 +195,31 @@ def compressor_job():
                         # Ensure output directory exists
                         os.makedirs(os.path.dirname(out_file), exist_ok=True)
                         
-                        # ImageMagick compression
-                        logger.info(f"Compressing image {input_file_path} to {out_file}")
-                        result = subprocess.run([
-                            'magick', input_file_path, '-quality', '75', out_file
-                        ], capture_output=True, text=True, timeout=300)
+                        # Check if Windows and use PIL, otherwise use ImageMagick
+                        if os.name == 'nt':  # Windows
+                            try:
+                                logger.info(f"Compressing image {input_file_path} to {out_file} using PIL")
+                                with Image.open(input_file_path) as img:
+                                    # Convert to RGB if saving as JPEG/WebP
+                                    if img.mode in ('RGBA', 'LA', 'P') and out_file.lower().endswith(('.jpg', '.jpeg', '.webp')):
+                                        img = img.convert('RGB')
+                                    
+                                    if out_file.lower().endswith('.png'):
+                                        img.save(out_file, 'PNG', optimize=True)
+                                    else:
+                                        img.save(out_file, 'WEBP', quality=75, optimize=True)
+                                
+                                # Simulate successful result for consistency
+                                result = type('Result', (), {'returncode': 0})()
+                            except Exception as e:
+                                logger.error(f"PIL compression failed for {input_file_path}: {e}")
+                                result = type('Result', (), {'returncode': 1, 'stderr': str(e)})()
+                        else:
+                            # ImageMagick compression for non-Windows
+                            logger.info(f"Compressing image {input_file_path} to {out_file}")
+                            result = subprocess.run([
+                                'magick', input_file_path, '-quality', '75', out_file
+                            ], capture_output=True, text=True, timeout=300)
                         
                     elif ext in ['mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'wmv', 'm4v', '3gp', 'mpeg', 'mpg']:
                         # Video processing

@@ -1,0 +1,50 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+.eggs/
+dist/
+sdist/
+*.egg-info/
+MANIFEST
+
+# PyInstaller
+#  Usually these files are written into a dist/ directory.
+#  For the sake of completeness, we are listing all the possible
+#  names, so make sure to modify the list depending on your build
+#  configuration!
+build/
+*.spec
+
+# Installer logs
+*.install.log
+*.pth
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.pytest_cache/
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+venv-old/
+*.swp
+*~
+tmp/
+temp/
+*.sqlite
+instance/
+.DS_Store

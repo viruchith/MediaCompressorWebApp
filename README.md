@@ -30,7 +30,7 @@ A Flask-based web application for batch compressing images and videos using Imag
 
 2. **Install Python dependencies:**
    ```bash
-    pip install flask flask-socketio   
+    pip install flask flask-socketio Pillow
     ```
 
 3. **Install ImageMagick and FFmpeg:**
