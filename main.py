@@ -9,6 +9,7 @@ import mimetypes
 from flask import Flask, request, jsonify, render_template
 from flask_socketio import SocketIO, emit
 from PIL import Image
+import ffmpeg
 
 # Configure logger
 logging.basicConfig(
@@ -243,13 +244,40 @@ def compressor_job():
                         # Ensure output directory exists
                         os.makedirs(os.path.dirname(out_file), exist_ok=True)
                         
-                        # FFmpeg video compression
-                        logger.info(f"Compressing video {input_file_path} to {out_file}")
-                        result = subprocess.run([
-                            'ffmpeg', '-y', '-i', input_file_path,
-                            '-c:v', 'libx265', '-preset', 'slow', '-crf', '28',
-                            '-c:a', 'aac', '-b:a', '128k', out_file
-                        ], capture_output=True, text=True, timeout=1200)  # Longer timeout for videos
+                        # Check if Windows and use ffmpeg-python, otherwise use subprocess
+                        if os.name == 'nt':  # Windows
+                            try:
+                                logger.info(f"Compressing video {input_file_path} to {out_file} using ffmpeg-python")
+                                
+                                (
+                                    ffmpeg
+                                    .input(input_file_path)
+                                    .output(out_file, 
+                                           vcodec='libx265', 
+                                           preset='slow', 
+                                           crf=28,
+                                           acodec='aac',
+                                           audio_bitrate='128k')
+                                    .overwrite_output()
+                                    .run(capture_stdout=True, capture_stderr=True)
+                                )
+                                
+                                # Simulate successful result for consistency
+                                result = type('Result', (), {'returncode': 0})()
+                            except ffmpeg.Error as e:
+                                logger.error(f"ffmpeg-python compression failed for {input_file_path}: {e.stderr.decode()}")
+                                result = type('Result', (), {'returncode': 1, 'stderr': e.stderr.decode()})()
+                            except Exception as e:
+                                logger.error(f"ffmpeg-python compression failed for {input_file_path}: {e}")
+                                result = type('Result', (), {'returncode': 1, 'stderr': str(e)})()
+                        else:
+                            # FFmpeg subprocess for non-Windows
+                            logger.info(f"Compressing video {input_file_path} to {out_file}")
+                            result = subprocess.run([
+                                'ffmpeg', '-y', '-i', input_file_path,
+                                '-c:v', 'libx265', '-preset', 'slow', '-crf', '28',
+                                '-c:a', 'aac', '-b:a', '128k', out_file
+                            ], capture_output=True, text=True, timeout=1200)  # Longer timeout for videos
                         
                     else:
                         logger.warning(f"Unsupported file type: {input_file_path}")
