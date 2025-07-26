@@ -330,6 +330,8 @@ def add_folder():
         if not output_folder_path:
             logger.error("No output folder path provided.")
             return jsonify({'message': 'No output folder path provided.'}), 400
+
+        is_windows = os.name == 'nt'
         
         # Check if folders exist
         if not os.path.exists(input_folder_path):
@@ -362,6 +364,10 @@ def add_folder():
                 relative_path = os.path.relpath(input_file_path, input_folder_path)
                 output_file_path = os.path.join(output_folder_path, relative_path)
                 
+                if is_windows:
+                    output_file_path = output_file_path.replace('\\', '\\\\')
+                    input_file_path = input_file_path.replace('\\', '\\\\')
+
                 # Insert file into the database
                 try:
                     conn.execute('''
