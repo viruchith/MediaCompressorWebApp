@@ -298,7 +298,7 @@ def compressor_job():
 @app.route('/')
 def index():
     logger.info("Rendering index page.")
-    return render_template('index4.html')
+    return render_template('index.html')
 
 @app.route('/files', methods=['GET'])
 def get_files():
