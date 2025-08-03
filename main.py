@@ -9,6 +9,7 @@ import mimetypes
 from flask import Flask, request, jsonify, render_template
 from flask_socketio import SocketIO, emit
 from PIL import Image
+from pillow_heif import register_heif_opener
 import ffmpeg
 
 # Configure logger
@@ -116,6 +117,7 @@ def get_file_extension(file_path):
 
 def compressor_job():
     """Background job to compress files"""
+    register_heif_opener()
     while True:
         try:
             conn = get_db()
@@ -171,7 +173,7 @@ def compressor_job():
                     ext = get_file_extension(input_file_path)
                     
                     # Process based on file type
-                    if ext in ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff', 'tif', 'webp', 'dng', 'raw', 'cr2', 'nef', 'arw', 'orf', 'sr2', 'raf', 'rw2', 'pef', 'srw']:
+                    if ext in ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff', 'tif', 'webp', 'dng', 'raw', 'cr2', 'nef', 'arw', 'orf', 'sr2', 'raf', 'rw2', 'pef', 'srw','heic']:
                         # Image processing
                         if not is_image_file(input_file_path):
                             logger.warning(f"Skipping non-image file with image extension: {input_file_path}")
@@ -402,7 +404,7 @@ def add_folder():
                 supported_extensions = [
                     'jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff', 'tif', 'webp', 'dng', 'raw', 
                     'cr2', 'nef', 'arw', 'orf', 'sr2', 'raf', 'rw2', 'pef', 'srw',
-                    'mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'wmv', 'm4v', '3gp', 'mpeg', 'mpg'
+                    'mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'wmv', 'm4v', '3gp', 'mpeg', 'mpg', 'heic'
                 ]
                 
                 if ext not in supported_extensions:
