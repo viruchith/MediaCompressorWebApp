@@ -255,9 +255,9 @@ def compressor_job():
                                     ffmpeg
                                     .input(input_file_path)
                                     .output(out_file, 
-                                           vcodec='libx264', 
+                                           vcodec='libx265', 
                                            preset='slow', 
-                                           crf=18,
+                                           crf=28,
                                            acodec='aac',
                                            audio_bitrate='128k')
                                     .overwrite_output()
@@ -277,7 +277,7 @@ def compressor_job():
                             logger.info(f"Compressing video {input_file_path} to {out_file}")
                             result = subprocess.run([
                                 'ffmpeg', '-y', '-i', input_file_path,
-                                '-c:v', 'libx264', '-preset', 'slow', '-crf', '18',
+                                '-c:v', 'libx265', '-preset', 'slow', '-crf', '28',
                                 '-c:a', 'aac', '-b:a', '128k', out_file
                             ], capture_output=True, text=True, timeout=1200)  # Longer timeout for videos
                         
