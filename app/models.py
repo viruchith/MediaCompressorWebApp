@@ -18,8 +18,18 @@ class Job:
     completed_files: int
     failed_files: int
     cancelled_files: int = 0
+    image_profile: Optional[str] = None
+    video_profile: Optional[str] = None
+
+    def resolved_image_profile(self) -> str:
+        return self.image_profile or self.profile or "balanced"
+
+    def resolved_video_profile(self) -> str:
+        return self.video_profile or self.profile or "balanced"
 
     def to_dict(self) -> Dict[str, Any]:
+        image_profile = self.resolved_image_profile()
+        video_profile = self.resolved_video_profile()
         return {
             "id": self.id,
             "input_folder": self.input_folder,
@@ -27,6 +37,8 @@ class Job:
             "image_settings": self.image_settings,
             "video_settings": self.video_settings,
             "profile": self.profile,
+            "image_profile": image_profile,
+            "video_profile": video_profile,
             "status": self.status,
             "created_at": self.created_at,
             "completed_at": self.completed_at,

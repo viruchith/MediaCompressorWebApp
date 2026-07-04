@@ -8,9 +8,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- Migrate from Eventlet to threading async mode for Socket.IO
 - Hardware acceleration toggle in the web UI
 - Built-in log rotation
+
+## [2.1.0] - 2026-07-04
+
+### Added
+- Separate **image** and **video** compression profile selection per job (`image_profile`, `video_profile`)
+- `POST /api/v1/cancel_queue` — cancel pending/processing files and terminate active FFmpeg processes
+- `POST /api/v1/clear_history` — cancel active work and flush all jobs and files
+- Legacy aliases `POST /cancel_queue` and `POST /clear_history`
+- `STATUS_CANCELLED` (-3) for cancelled files (distinct from permanent fail -2)
+- Online/offline WebSocket connection indicator on the main dashboard
+- Job-level size summaries (`total_input_bytes`, `total_output_bytes`, `overall_size_ratio`)
+- Self-hosted Socket.IO client (`static/vendor/socket.io.min.js`) — no CDN dependency
+- HTML error pages for 404 and 500 responses
+- `jobs.image_profile` and `jobs.video_profile` database columns with automatic migration
+
+### Changed
+- Socket.IO async mode migrated from Eventlet to **threading** for reliable worker-thread emits
+- Real-time file progress updates without full list reload on every tick
+- Job form UI: image and video profile dropdowns stacked vertically
+- Job cards and detail page show image/video profiles on separate lines when they differ
+- Completed records retained as audit trail; cancelled files tracked in queue statistics
+
+### Fixed
+- Priority validation returns `400 INVALID_PRIORITY` for non-numeric values
+- Removed invalid `broadcast=True` on Socket.IO emits (Flask-SocketIO 5.x compatibility)
+- FFmpeg cancel race no longer marks successful encodes as cancelled
+- Crash recovery simplified — single reset of all `PROCESSING` files to `PENDING` on startup
+- `clear_history` dispatch race — dispatch stays paused until after database flush
 
 ## [2.0.0] - 2026-07-04
 
@@ -51,6 +78,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SQLite queue with real-time WebSocket progress updates
 - Basic web UI with folder input and queue statistics
 
-[Unreleased]: https://github.com/viruchith/MediaCompressorWebApp/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/viruchith/MediaCompressorWebApp/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/viruchith/MediaCompressorWebApp/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/viruchith/MediaCompressorWebApp/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/viruchith/MediaCompressorWebApp/releases/tag/v1.0.0

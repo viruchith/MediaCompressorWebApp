@@ -1,13 +1,13 @@
 # MediaCompressorWebApp
 
-[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](VERSION)
+[![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)](VERSION)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
 [![Flask](https://img.shields.io/badge/Flask-3.0%2B-green.svg)](https://flask.palletsprojects.com/)
 
 > **Batch compress images and videos** with a production-grade Flask web app — parallel workers, crash recovery, encoding profiles, SHA-256 checksums, and real-time progress.
 
-**Author:** [Viruchith Ganesan](https://github.com/viruchith) · **Version:** 2.0.0 · **License:** [GPL-3.0](LICENSE)
+**Author:** [Viruchith Ganesan](https://github.com/viruchith) · **Version:** 2.1.0 · **License:** [GPL-3.0](LICENSE)
 
 ---
 
@@ -32,7 +32,7 @@
 
 ## Overview
 
-**MediaCompressorWebApp** is a self-hosted web application for batch-compressing image and video collections. Point it at an input folder, choose an encoding profile, and monitor progress in real time while parallel workers process your files.
+**MediaCompressorWebApp** is a self-hosted web application for batch-compressing image and video collections. Point it at an input folder, choose encoding profiles for images and videos independently, and monitor progress in real time while parallel workers process your files.
 
 Ideal for photographers, archivists, content creators, and anyone who needs repeatable, auditable media compression without cloud uploads.
 
@@ -67,10 +67,13 @@ Ideal for photographers, archivists, content creators, and anyone who needs repe
 | **Parallel processing** | Separate thread pools for images (default 4) and videos (default 2) |
 | **Crash recovery** | Stale in-flight files resume on restart; graceful SIGTERM/SIGINT shutdown |
 | **Encoding profiles** | Archival, balanced, web-optimized, mobile-friendly, and more |
+| **Split profiles** | Independent image and video preset per job (`image_profile`, `video_profile`) |
 | **Advanced settings** | Per-job image/video overrides via UI or REST API |
+| **Queue control** | Cancel pending work, clear completed history, or flush entire database |
 | **Archival-grade** | SHA-256 checksums, JSON manifests, metadata preservation |
-| **Real-time progress** | WebSocket updates with actual FFmpeg encoding percentage |
-| **Job management** | Pause, resume, retry failed, download manifest |
+| **Real-time progress** | WebSocket updates with FFmpeg encoding percentage and live file status |
+| **Connection status** | Online/offline indicator on the main dashboard |
+| **Job management** | Pause, resume, retry failed, download manifest, size-change summaries |
 | **Backward compatible** | Legacy routes and automatic DB migration from v1 schema |
 
 ---
@@ -135,9 +138,10 @@ python run.py
 Open **http://localhost:5000** in your browser.
 
 1. Enter **input** and **output** folder paths
-2. Select a **compression profile** (or expand Advanced Settings)
+2. Select **Image Profile** and **Video Profile** (or expand Advanced Settings for fine-tuning)
 3. Click **Start Compression Job**
-4. Watch real-time progress; download the manifest when the job completes
+4. Watch real-time progress (connection indicator shows **Online** when WebSocket is live)
+5. Download the manifest when the job completes
 
 Check the running version:
 
@@ -222,19 +226,35 @@ curl -X POST http://localhost:5000/api/v1/jobs \
   -d '{
     "input_folder": "/path/to/input",
     "output_folder": "/path/to/output",
-    "profile": "balanced",
+    "image_profile": "balanced",
+    "video_profile": "web_optimized",
     "priority": 5,
     "preserve_metadata": true
   }'
+```
+
+The legacy `profile` field still works and applies to both image and video when `image_profile` / `video_profile` are omitted.
+
+### Queue management
+
+```bash
+POST /api/v1/clear_completed    # Remove completed files from DB
+POST /api/v1/cancel_queue       # Cancel pending/processing files
+POST /api/v1/clear_history      # Flush all jobs and files
 ```
 
 ### WebSocket events
 
 | Event | Direction | Payload |
 |-------|-----------|---------|
-| `progress_update` | Server → Client | `file_id`, `status`, `message`, `percent` |
-| `queue_counts` | Server → Client | `total`, `pending`, `processing`, `completed`, `errors` |
+| `progress_update` | Server → Client | `file_id`, `job_id`, `status`, `message`, `percent` |
+| `queue_counts` | Server → Client | `total`, `pending`, `processing`, `completed`, `errors`, `cancelled` |
+| `queue_cancelled` | Server → Client | `message`, counts |
+| `history_cleared` | Server → Client | `message` |
+| `connection_status` | Server → Client | `status` (`connected`) |
 | `request_queue_counts` | Client → Server | — |
+
+The main UI shows an **Online** / **Offline** badge driven by Socket.IO `connect`, `disconnect`, and `connection_status` events.
 
 See [`CURRENT_STATE.md`](CURRENT_STATE.md) for the complete endpoint list and schema.
 
@@ -257,7 +277,7 @@ MediaCompressorWebApp/
 │   ├── compression/        # Profiles and settings validation
 │   └── utils/              # Hashing and manifests
 ├── templates/              # Jinja2 HTML templates
-├── static/                 # CSS and JavaScript
+├── static/                 # CSS, JavaScript, vendor assets
 ├── CHANGELOG.md            # Release history
 └── LICENSE                 # GNU GPL v3.0
 ```
@@ -270,6 +290,7 @@ This project follows [Semantic Versioning](https://semver.org/). The canonical v
 
 | Release | Date | Highlights |
 |---------|------|------------|
+| **2.1.0** | 2026-07-04 | Split image/video profiles, queue cancel/clear, live connection indicator, progress fixes |
 | **2.0.0** | 2026-07-04 | Major refactor — modular architecture, worker pools, API v1 |
 | **1.0.0** | 2025-01-01 | Initial monolithic Flask release |
 

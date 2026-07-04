@@ -9,7 +9,13 @@
 </head>
 <body>
     <header>
-        <h1>Media Compressor <span class="app-version">v{{ app_version }}</span></h1>
+        <div class="header-top">
+            <h1>Media Compressor <span class="app-version">v{{ app_version }}</span></h1>
+            <span id="connection-indicator" class="connection-indicator connecting" role="status" aria-live="polite">
+                <span class="connection-dot" aria-hidden="true"></span>
+                <span class="connection-label">Connecting…</span>
+            </span>
+        </div>
         <p>Batch compress images and videos with configurable encoding profiles</p>
     </header>
 
@@ -27,8 +33,12 @@
                        placeholder="C:\Photos\output or /home/user/photos-compressed">
             </div>
             <div class="form-group">
-                <label for="profile">Compression Profile</label>
-                <select id="profile" name="profile"></select>
+                <label for="image-profile">Image Profile</label>
+                <select id="image-profile" name="image_profile"></select>
+            </div>
+            <div class="form-group">
+                <label for="video-profile">Video Profile</label>
+                <select id="video-profile" name="video_profile"></select>
             </div>
             <div class="form-group">
                 <label for="priority">Priority</label>

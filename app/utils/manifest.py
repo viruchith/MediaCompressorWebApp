@@ -62,6 +62,8 @@ def build_job_manifest(job_id: int) -> Optional[Dict[str, Any]]:
         "job_id": job.id,
         "created_at": job.created_at,
         "profile": job.profile,
+        "image_profile": job.resolved_image_profile(),
+        "video_profile": job.resolved_video_profile(),
         "settings": {
             "image": json.loads(job.image_settings) if job.image_settings else {},
             "video": json.loads(job.video_settings) if job.video_settings else {},
