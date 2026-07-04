@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Encoding Settings — Media Compressor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <header>
+        <h1>Encoding Settings Reference</h1>
+        <p><a href="/">← Back to Compressor</a></p>
+    </header>
+
+    <div class="card">
+        <h2>Compression Profiles</h2>
+        <div id="profiles-list">Loading profiles...</div>
+    </div>
+
+    <div class="card">
+        <h2>Configuration</h2>
+        <p>Environment variables (see <code>config.env.example</code>):</p>
+        <table class="detail-table">
+            <tr><th>SECRET_KEY</th><td>Flask session secret</td></tr>
+            <tr><th>DB_PATH</th><td>SQLite database path (default: file_db.db)</td></tr>
+            <tr><th>WORKER_COUNT_IMAGES</th><td>Parallel image workers (default: 4)</td></tr>
+            <tr><th>WORKER_COUNT_VIDEOS</th><td>Parallel video workers (default: 2)</td></tr>
+            <tr><th>MAX_RETRIES</th><td>Max retry attempts per file (default: 3)</td></tr>
+            <tr><th>PROCESSING_TIMEOUT_MINUTES</th><td>Stale processing timeout (default: 30)</td></tr>
+            <tr><th>LOG_LEVEL</th><td>Logging level (default: INFO)</td></tr>
+            <tr><th>HOST / PORT</th><td>Server bind address (default: 0.0.0.0:5000)</td></tr>
+        </table>
+    </div>
+
+    {% include '_footer.html' %}
+
+    <script>
+        fetch('/api/v1/profiles')
+            .then(r => r.json())
+            .then(profiles => {
+                const container = document.getElementById('profiles-list');
+                container.innerHTML = '';
+                for (const [name, data] of Object.entries(profiles)) {
+                    const div = document.createElement('div');
+                    div.className = 'job-card';
+                    div.innerHTML = `
+                        <h4>${name.replace(/_/g, ' ')}</h4>
+                        <p>${data.description}</p>
+                        <pre>${JSON.stringify({ image: data.image, video: data.video }, null, 2)}</pre>
+                    `;
+                    container.appendChild(div);
+                }
+            });
+    </script>
+</body>
+</html>
