@@ -32,6 +32,8 @@
         </table>
     </div>
 
+    {% include '_footer.html' %}
+
     <script>
         fetch('/api/v1/profiles')
             .then(r => r.json())

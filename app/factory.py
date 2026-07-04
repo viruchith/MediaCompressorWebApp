@@ -7,6 +7,7 @@ import sys
 from flask import Flask, jsonify
 from flask_socketio import SocketIO
 
+from app.version import VERSION, APP_AUTHOR, APP_COPYRIGHT_YEAR, APP_NAME, GITHUB_URL
 from app.config import config
 from app import db
 from app.routes import api_bp, web_bp
@@ -57,6 +58,17 @@ def create_app() -> tuple:
     app.register_blueprint(api_bp, url_prefix="/api/v1")
 
     register_socket_handlers(socketio)
+
+    @app.context_processor
+    def inject_app_metadata():
+        return {
+            "app_version": VERSION,
+            "version": VERSION,
+            "author": APP_AUTHOR,
+            "copyright_year": APP_COPYRIGHT_YEAR,
+            "app_name": APP_NAME,
+            "github_url": GITHUB_URL,
+        }
 
     @app.errorhandler(404)
     def not_found(e):

@@ -9,7 +9,7 @@
 </head>
 <body>
     <header>
-        <h1>Media Compressor</h1>
+        <h1>Media Compressor <span class="app-version">v{{ app_version }}</span></h1>
         <p>Batch compress images and videos with configurable encoding profiles</p>
     </header>
 
@@ -179,6 +179,8 @@
         <ul id="file-list"></ul>
         <div class="pagination" id="file-pagination"></div>
     </div>
+
+    {% include '_footer.html' %}
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>

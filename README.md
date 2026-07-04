@@ -1,84 +1,218 @@
 # MediaCompressorWebApp
 
-A production-grade Flask web application for batch compressing images and videos. Features parallel worker pools, crash recovery, configurable encoding profiles, SHA-256 checksums, and compression manifests.
+[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](VERSION)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
+[![Flask](https://img.shields.io/badge/Flask-3.0%2B-green.svg)](https://flask.palletsprojects.com/)
+
+> **Batch compress images and videos** with a production-grade Flask web app — parallel workers, crash recovery, encoding profiles, SHA-256 checksums, and real-time progress.
+
+**Author:** [Viruchith Ganesan](https://github.com/viruchith) · **Version:** 2.0.0 · **License:** [GPL-3.0](LICENSE)
+
+---
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Screenshots](#screenshots)
+- [Features](#features)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Configuration](#configuration)
+- [Compression Profiles](#compression-profiles)
+- [API Reference](#api-reference)
+- [Architecture](#architecture)
+- [Versioning](#versioning)
+- [Contributing](#contributing)
+- [License](#license)
+- [Acknowledgements](#acknowledgements)
+
+---
+
+## Overview
+
+**MediaCompressorWebApp** is a self-hosted web application for batch-compressing image and video collections. Point it at an input folder, choose an encoding profile, and monitor progress in real time while parallel workers process your files.
+
+Ideal for photographers, archivists, content creators, and anyone who needs repeatable, auditable media compression without cloud uploads.
+
+| | |
+|---|---|
+| **Repository** | https://github.com/viruchith/MediaCompressorWebApp |
+| **Language** | Python 3.9+ |
+| **Database** | SQLite (embedded, no external server) |
+| **Image engine** | Pillow (+ optional ImageMagick) |
+| **Video engine** | FFmpeg |
+
+---
+
+## Screenshots
+
+> Placeholder — add screenshots to `docs/images/` and update links below.
+
+| Main dashboard | Job detail |
+|:---:|:---:|
+| ![Main dashboard](docs/images/screenshot-dashboard.png) | ![Job detail](docs/images/screenshot-job-detail.png) |
+
+| Compression profiles | Real-time progress |
+|:---:|:---:|
+| ![Profiles](docs/images/screenshot-profiles.png) | ![Progress](docs/images/screenshot-progress.png) |
+
+---
 
 ## Features
 
-- **Parallel processing** — Separate thread pools for images (default 4) and videos (default 2)
-- **Crash recovery** — Stale in-flight files resume on restart; graceful shutdown on SIGTERM/SIGINT
-- **Encoding profiles** — Archival, balanced, web-optimized, mobile-friendly, and more
-- **Advanced settings** — Per-job image/video encoding overrides via UI or API
-- **Archival-grade handling** — SHA-256 checksums, JSON manifests, metadata preservation
-- **Real-time progress** — WebSocket updates with actual FFmpeg encoding percentage for videos
-- **Job management** — Pause, resume, retry failed, download manifest
-- **Backward compatible** — Legacy `/folder`, `/files`, `/queue_counts` routes still work; old DB auto-migrates
+| Feature | Description |
+|---------|-------------|
+| **Parallel processing** | Separate thread pools for images (default 4) and videos (default 2) |
+| **Crash recovery** | Stale in-flight files resume on restart; graceful SIGTERM/SIGINT shutdown |
+| **Encoding profiles** | Archival, balanced, web-optimized, mobile-friendly, and more |
+| **Advanced settings** | Per-job image/video overrides via UI or REST API |
+| **Archival-grade** | SHA-256 checksums, JSON manifests, metadata preservation |
+| **Real-time progress** | WebSocket updates with actual FFmpeg encoding percentage |
+| **Job management** | Pause, resume, retry failed, download manifest |
+| **Backward compatible** | Legacy routes and automatic DB migration from v1 schema |
+
+---
 
 ## Requirements
 
-- Python 3.9+
-- [FFmpeg](https://ffmpeg.org/) in PATH (for video compression)
-- Pillow handles images on all platforms (ImageMagick optional)
+- **Python** 3.9 or newer
+- **FFmpeg** in `PATH` (required for video compression)
+- **Pillow** (installed via `requirements.txt`; handles images on all platforms)
+
+### Optional
+
+- **ImageMagick** (`magick`) — alternative image backend (not required)
+- **Copy `.env`** from `config.env.example` for custom configuration
+
+---
 
 ## Installation
+
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/viruchith/MediaCompressorWebApp.git
 cd MediaCompressorWebApp
+```
+
+### 2. Install Python dependencies
+
+```bash
 pip install -r requirements.txt
 ```
 
-Copy `config.env.example` to `.env` and adjust settings as needed.
+### 3. Install FFmpeg
 
-### FFmpeg
+| Platform | Command |
+|----------|---------|
+| **Ubuntu / Debian** | `sudo apt install ffmpeg` |
+| **macOS** | `brew install ffmpeg` |
+| **Windows** | Download from [ffmpeg.org](https://ffmpeg.org/download.html) and add to `PATH` |
 
-- **Ubuntu/Debian:** `sudo apt install ffmpeg`
-- **macOS:** `brew install ffmpeg`
-- **Windows:** Download from https://ffmpeg.org/download.html and add to PATH
+Verify:
 
-## Usage
+```bash
+ffmpeg -version
+```
+
+### 4. Configure (optional)
+
+```bash
+cp config.env.example .env
+# Edit .env — set SECRET_KEY, worker counts, etc.
+```
+
+---
+
+## Quick Start
 
 ```bash
 python run.py
 ```
 
-Open http://localhost:5000
+Open **http://localhost:5000** in your browser.
 
-1. Enter input and output folder paths
-2. Select a compression profile (or customize advanced settings)
+1. Enter **input** and **output** folder paths
+2. Select a **compression profile** (or expand Advanced Settings)
 3. Click **Start Compression Job**
-4. Monitor progress in real time; download manifest when complete
+4. Watch real-time progress; download the manifest when the job completes
+
+Check the running version:
+
+```bash
+curl http://localhost:5000/api/v1/version
+```
+
+---
 
 ## Configuration
 
-Environment variables (see `config.env.example`):
+Environment variables (see [`config.env.example`](config.env.example)):
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SECRET_KEY` | (dev default) | Flask session secret |
-| `DB_PATH` | `file_db.db` | SQLite database |
-| `WORKER_COUNT_IMAGES` | `4` | Image worker threads |
-| `WORKER_COUNT_VIDEOS` | `2` | Video worker threads |
-| `MAX_RETRIES` | `3` | Per-file retry limit |
-| `PROCESSING_TIMEOUT_MINUTES` | `30` | Stale job timeout |
-| `LOG_LEVEL` | `INFO` | Log verbosity |
-| `LOG_JSON` | `false` | Enable JSON log format |
+| `SECRET_KEY` | *(dev default)* | Flask session secret — **change in production** |
+| `DB_PATH` | `file_db.db` | SQLite database file path |
+| `WORKER_COUNT_IMAGES` | `4` | Parallel image worker threads |
+| `WORKER_COUNT_VIDEOS` | `2` | Parallel video worker threads |
+| `MAX_RETRIES` | `3` | Per-file retry limit before permanent failure |
+| `PROCESSING_TIMEOUT_MINUTES` | `30` | Reset stale in-flight files after N minutes |
+| `LOG_LEVEL` | `INFO` | Logging verbosity (`DEBUG`, `INFO`, `WARNING`, …) |
+| `LOG_JSON` | `false` | Emit structured JSON logs |
 | `HOST` | `0.0.0.0` | Server bind address |
 | `PORT` | `5000` | Server port |
 
+---
+
 ## Compression Profiles
 
-| Profile | Use Case |
-|---------|----------|
-| `archival_lossless` | Lossless PNG + H.265 CRF 0 for long-term archival |
-| `archival_visually_lossless` | Near-lossless WebP + H.265 CRF 18 |
-| `balanced` | Default — good quality/size tradeoff (WebP q75, H.265 CRF 28) |
-| `web_optimized` | H.264 MP4, resized images for web delivery |
-| `mobile_friendly` | 720p video, 1080px max images |
-| `maximum_compression` | Smallest files, lower quality |
+| Profile | Best for | Image | Video |
+|---------|----------|-------|-------|
+| `archival_lossless` | Long-term archival | PNG lossless | H.265 CRF 0 |
+| `archival_visually_lossless` | Near-lossless archive | WebP q95 | H.265 CRF 18 |
+| `balanced` | **Default** — quality/size balance | WebP q75 | H.265 CRF 28 |
+| `web_optimized` | Web delivery | WebP q60, max 1920px | H.264 MP4 |
+| `mobile_friendly` | Mobile devices | WebP q70, max 1080px | H.264 720p |
+| `maximum_compression` | Smallest files | WebP q40 | H.265 CRF 35 |
 
-## API
+List profiles via API:
 
-All new endpoints are prefixed with `/api/v1/`. Error responses use `{"error": "...", "code": "ERROR_CODE"}`.
+```bash
+curl http://localhost:5000/api/v1/profiles
+```
+
+---
+
+## API Reference
+
+All v1 endpoints are prefixed with `/api/v1/`. Errors return:
+
+```json
+{"error": "Human-readable message", "code": "ERROR_CODE"}
+```
+
+### Version
+
+```bash
+GET /api/v1/version
+GET /version          # legacy alias
+```
+
+### Jobs
+
+```bash
+GET    /api/v1/jobs                         # List jobs (paginated)
+POST   /api/v1/jobs                         # Create job
+GET    /api/v1/jobs/<id>                    # Job details
+PUT    /api/v1/jobs/<id>/pause              # Pause job
+PUT    /api/v1/jobs/<id>/resume             # Resume job
+DELETE /api/v1/jobs/<id>                    # Delete job
+GET    /api/v1/jobs/<id>/files              # List files in job
+POST   /api/v1/jobs/<id>/retry_failed       # Retry failed files
+GET    /api/v1/jobs/<id>/manifest           # Download JSON manifest
+```
 
 ### Create a job
 
@@ -94,66 +228,81 @@ curl -X POST http://localhost:5000/api/v1/jobs \
   }'
 ```
 
-### List profiles
+### WebSocket events
 
-```bash
-curl http://localhost:5000/api/v1/profiles
-```
+| Event | Direction | Payload |
+|-------|-----------|---------|
+| `progress_update` | Server → Client | `file_id`, `status`, `message`, `percent` |
+| `queue_counts` | Server → Client | `total`, `pending`, `processing`, `completed`, `errors` |
+| `request_queue_counts` | Client → Server | — |
 
-### Download manifest
+See [`CURRENT_STATE.md`](CURRENT_STATE.md) for the complete endpoint list and schema.
 
-```bash
-curl http://localhost:5000/api/v1/jobs/1/manifest
-```
-
-See `CURRENT_STATE.md` for the full endpoint list.
+---
 
 ## Architecture
 
 ```
-app/
-├── factory.py          # App factory, logging, signals
-├── config.py           # Environment configuration
-├── db.py               # SQLite + migrations + crash recovery
-├── routes.py           # HTTP routes
-├── sockets.py          # WebSocket handlers
-├── workers/
-│   ├── manager.py      # Thread pool dispatcher
-│   ├── image_worker.py # PIL compression
-│   └── video_worker.py # FFmpeg compression
-├── compression/
-│   ├── profiles.py     # Encoding presets
-│   └── settings.py     # Validation & merge
-└── utils/
-    ├── hashing.py      # SHA-256
-    └── manifest.py     # JSON manifests
+MediaCompressorWebApp/
+├── run.py                  # Entry point
+├── VERSION                 # Canonical version string (read by app/version.py)
+├── app/
+│   ├── factory.py          # Flask app factory, logging, signals
+│   ├── version.py          # VERSION, author, copyright metadata
+│   ├── config.py           # Environment configuration
+│   ├── db.py               # SQLite, migrations, crash recovery
+│   ├── routes.py           # HTTP routes (web + API v1)
+│   ├── sockets.py          # WebSocket handlers
+│   ├── workers/            # Parallel compression workers
+│   ├── compression/        # Profiles and settings validation
+│   └── utils/              # Hashing and manifests
+├── templates/              # Jinja2 HTML templates
+├── static/                 # CSS and JavaScript
+├── CHANGELOG.md            # Release history
+└── LICENSE                 # GNU GPL v3.0
 ```
 
-## WebSocket Events
+---
 
-| Event | Direction | Description |
-|-------|-----------|-------------|
-| `progress_update` | Server → Client | File progress (`file_id`, `status`, `message`, `percent`) |
-| `queue_counts` | Server → Client | Queue statistics |
-| `request_queue_counts` | Client → Server | Request current counts |
+## Versioning
 
-## Logging
+This project follows [Semantic Versioning](https://semver.org/). The canonical version is stored in the [`VERSION`](VERSION) file and loaded by [`app/version.py`](app/version.py).
 
-Set `LOG_JSON=true` for structured JSON logs. For file-based rotation, redirect output:
+| Release | Date | Highlights |
+|---------|------|------------|
+| **2.0.0** | 2026-07-04 | Major refactor — modular architecture, worker pools, API v1 |
+| **1.0.0** | 2025-01-01 | Initial monolithic Flask release |
 
-```bash
-python run.py 2>&1 | rotatelogs access.log 86400
-```
+See [`CHANGELOG.md`](CHANGELOG.md) for full release notes.
 
-Or configure system logrotate on the log file.
+---
+
+## Contributing
+
+Contributions are welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/my-feature`)
+3. Commit your changes with clear messages
+4. Open a Pull Request against `main`
+
+By contributing, you agree that your contributions will be licensed under the **GPL-3.0** license.
+
+---
 
 ## License
 
-MIT License
+Copyright © 2025–2026 **Viruchith Ganesan**
+
+This program is free software: you can redistribute it and/or modify it under the terms of the **GNU General Public License v3.0** as published by the Free Software Foundation.
+
+See the [LICENSE](LICENSE) file for the full license text.
+
+---
 
 ## Acknowledgements
 
-- [FFmpeg](https://ffmpeg.org/)
-- [Pillow](https://python-pillow.org/)
-- [Flask](https://flask.palletsprojects.com/)
-- [Flask-SocketIO](https://flask-socketio.readthedocs.io/)
+- [FFmpeg](https://ffmpeg.org/) — video transcoding
+- [Pillow](https://python-pillow.org/) — image processing
+- [Flask](https://flask.palletsprojects.com/) — web framework
+- [Flask-SocketIO](https://flask-socketio.readthedocs.io/) — real-time updates

@@ -7,6 +7,7 @@ from app.compression.profiles import PROFILES
 from app.compression.settings import get_effective_settings
 from app import db
 from app.config import config
+from app.version import APP_AUTHOR, APP_COPYRIGHT_YEAR, APP_NAME, GITHUB_URL, VERSION
 from app.utils.manifest import build_job_manifest
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,27 @@ def job_detail_page(job_id):
     if not job:
         return render_template("job_detail.html", job=None), 404
     return render_template("job_detail.html", job=job.to_dict())
+
+
+@web_bp.route("/version", methods=["GET"])
+def legacy_version():
+    return jsonify(get_version_info())
+
+
+@api_bp.route("/version", methods=["GET"])
+def api_version():
+    return jsonify(get_version_info())
+
+
+def get_version_info():
+    return {
+        "version": VERSION,
+        "author": APP_AUTHOR,
+        "copyright_year": APP_COPYRIGHT_YEAR,
+        "app_name": APP_NAME,
+        "license": "GPL-3.0",
+        "repository": GITHUB_URL,
+    }
 
 
 # --- API v1 ---
