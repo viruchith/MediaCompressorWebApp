@@ -145,9 +145,9 @@ def compress_video(
                 progress_callback(pct, f"Encoding {pct}%")
 
         proc.wait()
-        if should_cancel and should_cancel():
-            raise InterruptedError("Video compression cancelled")
         if proc.returncode != 0:
+            if should_cancel and should_cancel():
+                raise InterruptedError("Video compression cancelled")
             raise RuntimeError(f"FFmpeg failed with code {proc.returncode}")
 
         if progress_callback:

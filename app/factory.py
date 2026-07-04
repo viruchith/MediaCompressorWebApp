@@ -4,7 +4,7 @@ import logging.handlers
 import signal
 import sys
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, render_template_string
 from flask_socketio import SocketIO
 
 from app.version import VERSION, APP_AUTHOR, APP_COPYRIGHT_YEAR, APP_NAME, GITHUB_URL
@@ -74,14 +74,32 @@ def create_app() -> tuple:
     def not_found(e):
         if request_wants_json():
             return jsonify({"error": "Not found", "code": "NOT_FOUND"}), 404
-        return e
+        return (
+            render_template_string(
+                "<!DOCTYPE html><html><head><title>404 Not Found</title>"
+                '<link rel="stylesheet" href="{{ url_for(\'static\', filename=\'css/style.css\') }}">'
+                "</head><body><header><h1>404 — Not Found</h1></header>"
+                '<div class="card"><p>The page you requested was not found.</p>'
+                '<a href="/">Back to home</a></div></body></html>'
+            ),
+            404,
+        )
 
     @app.errorhandler(500)
     def server_error(e):
         logger.error("Internal server error: %s", e)
         if request_wants_json():
             return jsonify({"error": "Internal server error", "code": "INTERNAL_ERROR"}), 500
-        return e
+        return (
+            render_template_string(
+                "<!DOCTYPE html><html><head><title>500 Server Error</title>"
+                '<link rel="stylesheet" href="{{ url_for(\'static\', filename=\'css/style.css\') }}">'
+                "</head><body><header><h1>500 — Internal Server Error</h1></header>"
+                '<div class="card"><p>Something went wrong. Please try again later.</p>'
+                '<a href="/">Back to home</a></div></body></html>'
+            ),
+            500,
+        )
 
     global _worker_manager
     _worker_manager = WorkerManager(socketio)

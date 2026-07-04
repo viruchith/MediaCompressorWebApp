@@ -80,7 +80,7 @@ class WorkerManager:
 
         logger.info(message)
         payload = {"message": message, "cancelled": cancelled_count, "terminated": terminated}
-        self.socketio.emit("queue_cancelled", payload)
+        self._emit("queue_cancelled", payload)
         self._emit_queue_counts()
         return payload
 
@@ -95,7 +95,7 @@ class WorkerManager:
         )
         logger.info(message)
         payload = {"message": message, "removed": removed}
-        self.socketio.emit("history_cleared", payload)
+        self._emit("history_cleared", payload)
         self._emit_queue_counts()
         return payload
 
@@ -211,12 +211,8 @@ class WorkerManager:
             finally:
                 self._process_registry.unregister(file_id)
 
-            if self._cancel_event.is_set():
-                self._ensure_terminal_on_cancel(file_id)
-                return
-
             file_rec = db.get_file(file_id)
-            if not file_rec or file_rec.status == config.STATUS_CANCELLED:
+            if not file_rec:
                 return
 
             out_path, inp_hash, out_hash, inp_size, out_size, ratio = result
@@ -296,8 +292,12 @@ class WorkerManager:
         }
         if extra:
             payload.update(extra)
-        self.socketio.emit("progress_update", payload)
+        self._emit("progress_update", payload)
 
     def _emit_queue_counts(self):
         counts = db.get_queue_counts()
-        self.socketio.emit("queue_counts", counts)
+        self._emit("queue_counts", counts)
+
+    def _emit(self, event: str, payload):
+        """Emit from background threads (dispatcher/workers) to all clients."""
+        self.socketio.emit(event, payload, broadcast=True)

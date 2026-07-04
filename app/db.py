@@ -231,10 +231,8 @@ def init_db():
 
 
 def crash_recovery(conn: Optional[sqlite3.Connection] = None):
-    """Reset stale processing files on startup."""
+    """Reset stale processing files on startup (workers are not running)."""
     conn = conn or get_db()
-    timeout_minutes = config.PROCESSING_TIMEOUT_MINUTES
-    cutoff = (datetime.utcnow() - timedelta(minutes=timeout_minutes)).isoformat()
 
     conn.execute(
         """UPDATE files SET status = ?, started_at = NULL,
@@ -242,14 +240,6 @@ def crash_recovery(conn: Optional[sqlite3.Connection] = None):
            error_message = 'Reset after crash or timeout'
            WHERE status = ?""",
         (config.STATUS_PENDING, config.STATUS_PROCESSING),
-    )
-
-    conn.execute(
-        """UPDATE files SET status = ?, started_at = NULL,
-           retry_count = retry_count + 1,
-           error_message = 'Reset after processing timeout'
-           WHERE status = ? AND started_at IS NOT NULL AND started_at < ?""",
-        (config.STATUS_PENDING, config.STATUS_PROCESSING, cutoff),
     )
 
     conn.execute(
@@ -527,6 +517,15 @@ def mark_file_completed(
 ):
     conn = get_db()
     now = datetime.utcnow().isoformat()
+    file_row = conn.execute(
+        "SELECT job_id, status FROM files WHERE id = ?", (file_id,)
+    ).fetchone()
+    if not file_row:
+        return
+
+    previous_status = file_row["status"]
+    job_id = file_row["job_id"]
+
     conn.execute(
         """UPDATE files SET status = ?, output_file_path = ?, output_size = ?,
            output_hash = ?, input_size = ?, input_hash = ?,
@@ -537,14 +536,18 @@ def mark_file_completed(
             input_size, input_hash, compression_ratio, now, file_id,
         ),
     )
-    file_row = conn.execute("SELECT job_id FROM files WHERE id = ?", (file_id,)).fetchone()
-    if file_row:
-        job_id = file_row["job_id"]
+    if previous_status == config.STATUS_CANCELLED:
+        conn.execute(
+            """UPDATE jobs SET cancelled_files = cancelled_files - 1,
+               completed_files = completed_files + 1 WHERE id = ?""",
+            (job_id,),
+        )
+    else:
         conn.execute(
             "UPDATE jobs SET completed_files = completed_files + 1 WHERE id = ?",
             (job_id,),
         )
-        _maybe_complete_job(conn, job_id)
+    _maybe_complete_job(conn, job_id)
     conn.commit()
 
 
