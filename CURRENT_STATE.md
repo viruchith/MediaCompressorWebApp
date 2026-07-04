@@ -91,7 +91,8 @@ Unchanged table structure. File status values:
 
 - Image compression cannot be interrupted mid-PIL-save (short window); video FFmpeg processes are terminated immediately
 - `clear_history` counts both jobs and files in the removed total
-- Status `-3` used instead of `-2` for cancelled ( `-2` reserved for permanent fail in refactored schema)
+- Status `-3` used instead of `-2` for cancelled (`-2` reserved for permanent fail in refactored schema)
+- `clear_history` keeps dispatch paused via `cancel_queue(resume_dispatch=False)` until after DB flush (fixes dispatch race)
 
 ## How to Test
 

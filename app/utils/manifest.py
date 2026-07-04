@@ -3,6 +3,7 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
+from app.config import config
 from app.db import get_job, list_files_for_job
 from app.models import status_label
 
@@ -28,16 +29,19 @@ def build_job_manifest(job_id: int) -> Optional[Dict[str, Any]]:
     total_output = 0
     completed = 0
     failed = 0
+    cancelled = 0
 
     for f in files.items:
         inp = f.input_size or 0
         out = f.output_size or 0
         total_input += inp
         total_output += out
-        if f.status == 1:
+        if f.status == config.STATUS_COMPLETED:
             completed += 1
-        elif f.status in (-1, -2):
+        elif f.status in (config.STATUS_ERROR, config.STATUS_PERMANENT_FAIL):
             failed += 1
+        elif f.status == config.STATUS_CANCELLED:
+            cancelled += 1
 
         file_entries.append({
             "input_path": f.input_file_path,
@@ -67,6 +71,7 @@ def build_job_manifest(job_id: int) -> Optional[Dict[str, Any]]:
             "total_files": job.total_files,
             "completed": completed,
             "failed": failed,
+            "cancelled": cancelled,
             "total_input_size": _format_bytes(total_input),
             "total_output_size": _format_bytes(total_output),
             "total_input_bytes": total_input,

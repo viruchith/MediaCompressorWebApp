@@ -100,7 +100,13 @@ def _create_job_from_data(data: dict):
     os.makedirs(output_folder, exist_ok=True)
 
     profile = data.get("profile", "balanced")
-    priority = int(data.get("priority", 0))
+    try:
+        priority = int(data.get("priority", 0))
+    except (TypeError, ValueError):
+        return {
+            "error": "priority must be an integer",
+            "code": "INVALID_PRIORITY",
+        }, 400
     preserve_metadata = data.get("preserve_metadata", True)
     if isinstance(preserve_metadata, str):
         preserve_metadata = preserve_metadata.lower() in ("1", "true", "yes")
@@ -108,9 +114,21 @@ def _create_job_from_data(data: dict):
     image_overrides = data.get("image_settings", {})
     video_overrides = data.get("video_settings", {})
     if isinstance(image_overrides, str):
-        image_overrides = json.loads(image_overrides)
+        try:
+            image_overrides = json.loads(image_overrides)
+        except json.JSONDecodeError:
+            return {
+                "error": "image_settings must be valid JSON",
+                "code": "INVALID_JSON",
+            }, 400
     if isinstance(video_overrides, str):
-        video_overrides = json.loads(video_overrides)
+        try:
+            video_overrides = json.loads(video_overrides)
+        except json.JSONDecodeError:
+            return {
+                "error": "video_settings must be valid JSON",
+                "code": "INVALID_JSON",
+            }, 400
 
     image_settings, video_settings, errors = get_effective_settings(
         profile_name=profile,

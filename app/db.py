@@ -27,7 +27,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     completed_at TIMESTAMP NULL,
     total_files INTEGER DEFAULT 0,
     completed_files INTEGER DEFAULT 0,
-    failed_files INTEGER DEFAULT 0
+    failed_files INTEGER DEFAULT 0,
+    cancelled_files INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS files (
@@ -117,7 +118,8 @@ def _migrate_v0_to_v1(conn: sqlite3.Connection):
         completed_at TIMESTAMP NULL,
         total_files INTEGER DEFAULT 0,
         completed_files INTEGER DEFAULT 0,
-        failed_files INTEGER DEFAULT 0
+        failed_files INTEGER DEFAULT 0,
+        cancelled_files INTEGER DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS schema_version (
@@ -181,6 +183,17 @@ def _migrate_v0_to_v1(conn: sqlite3.Connection):
     logger.info("Migration v0 -> v1 complete (%d legacy files)", len(legacy_rows))
 
 
+def _ensure_schema_updates(conn: sqlite3.Connection):
+    """Apply incremental schema updates without full version bump."""
+    job_cols = _table_columns(conn, "jobs")
+    if "cancelled_files" not in job_cols:
+        conn.execute(
+            "ALTER TABLE jobs ADD COLUMN cancelled_files INTEGER DEFAULT 0"
+        )
+        conn.commit()
+        logger.info("Added jobs.cancelled_files column")
+
+
 def init_db():
     conn = get_db()
     version = _get_schema_version(conn)
@@ -196,6 +209,7 @@ def init_db():
             old_cols = _table_columns(conn, "files")
             if "compressed" in old_cols and "job_id" not in old_cols:
                 _migrate_v0_to_v1(conn)
+                _ensure_schema_updates(conn)
                 crash_recovery(conn)
                 return
         conn.executescript(SCHEMA_V1)
@@ -212,6 +226,7 @@ def init_db():
         )
         conn.commit()
 
+    _ensure_schema_updates(conn)
     crash_recovery(conn)
 
 
@@ -272,6 +287,7 @@ def _row_to_job(row: sqlite3.Row) -> Job:
         total_files=row["total_files"],
         completed_files=row["completed_files"],
         failed_files=row["failed_files"],
+        cancelled_files=row["cancelled_files"] if "cancelled_files" in row.keys() else 0,
     )
 
 
@@ -377,6 +393,7 @@ def add_files_batch(job_id: int, files: List[Tuple], priority: int = 0, max_retr
     conn.execute(
         "UPDATE jobs SET total_files = ? WHERE id = ?", (added, job_id)
     )
+    _maybe_complete_job(conn, job_id)
     conn.commit()
     return added
 
@@ -564,11 +581,22 @@ def reset_file_for_retry(file_id: int):
 
 def mark_file_cancelled(file_id: int):
     conn = get_db()
+    file_row = conn.execute(
+        "SELECT job_id, status FROM files WHERE id = ?", (file_id,)
+    ).fetchone()
+    if not file_row or file_row["status"] == config.STATUS_CANCELLED:
+        return
+
     conn.execute(
         """UPDATE files SET status = ?, error_message = 'Cancelled by user',
            started_at = NULL WHERE id = ?""",
         (config.STATUS_CANCELLED, file_id),
     )
+    conn.execute(
+        "UPDATE jobs SET cancelled_files = cancelled_files + 1 WHERE id = ?",
+        (file_row["job_id"],),
+    )
+    _maybe_complete_job(conn, file_row["job_id"])
     conn.commit()
 
 
@@ -621,12 +649,27 @@ def clear_completed_files() -> int:
 def cancel_queue_files() -> int:
     """Mark all pending and processing files as cancelled."""
     conn = get_db()
+    job_rows = conn.execute(
+        """SELECT DISTINCT job_id FROM files
+           WHERE status IN (?, ?)""",
+        (config.STATUS_PENDING, config.STATUS_PROCESSING),
+    ).fetchall()
     cursor = conn.execute(
         """UPDATE files SET status = ?, error_message = 'Cancelled by user',
            started_at = NULL
            WHERE status IN (?, ?)""",
         (config.STATUS_CANCELLED, config.STATUS_PENDING, config.STATUS_PROCESSING),
     )
+    for row in job_rows:
+        job_id = row["job_id"]
+        conn.execute(
+            """UPDATE jobs SET cancelled_files = (
+               SELECT COUNT(*) FROM files
+               WHERE job_id = ? AND status = ?
+            ) WHERE id = ?""",
+            (job_id, config.STATUS_CANCELLED, job_id),
+        )
+        _maybe_complete_job(conn, job_id)
     conn.commit()
     return cursor.rowcount
 
@@ -685,13 +728,15 @@ def get_job_settings(job_id: int) -> Tuple[dict, dict]:
 
 def _maybe_complete_job(conn: sqlite3.Connection, job_id: int):
     row = conn.execute(
-        """SELECT total_files, completed_files, failed_files FROM jobs WHERE id = ?""",
+        """SELECT total_files, completed_files, failed_files, cancelled_files
+           FROM jobs WHERE id = ?""",
         (job_id,),
     ).fetchone()
     if not row:
         return
-    done = row["completed_files"] + row["failed_files"]
-    if row["total_files"] > 0 and done >= row["total_files"]:
+    cancelled = row["cancelled_files"] if "cancelled_files" in row.keys() else 0
+    done = row["completed_files"] + row["failed_files"] + cancelled
+    if done >= row["total_files"]:
         conn.execute(
             "UPDATE jobs SET status = 'completed', completed_at = ? WHERE id = ?",
             (datetime.utcnow().isoformat(), job_id),

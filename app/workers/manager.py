@@ -61,13 +61,18 @@ class WorkerManager:
         self._video_pool.shutdown(wait=wait, cancel_futures=False)
         logger.info("Worker manager stopped")
 
-    def cancel_queue(self) -> dict:
-        """Cancel all pending and in-progress work."""
+    def cancel_queue(self, resume_dispatch: bool = True) -> dict:
+        """Cancel all pending and in-progress work.
+
+        When resume_dispatch is False (used by clear_history), the cancel flag
+        stays set so the dispatcher cannot claim new work until the caller clears it.
+        """
         self._cancel_event.set()
         terminated = self._process_registry.terminate_all()
         cancelled_count = db.cancel_queue_files()
         time.sleep(0.5)
-        self._cancel_event.clear()
+        if resume_dispatch:
+            self._cancel_event.clear()
 
         message = f"Queue cancelled. {cancelled_count} file(s) cancelled."
         if terminated:
@@ -81,8 +86,7 @@ class WorkerManager:
 
     def clear_history(self) -> dict:
         """Stop active work and flush the entire database."""
-        self.cancel_queue()
-        time.sleep(0.3)
+        self.cancel_queue(resume_dispatch=False)
         removed = db.flush_database()
         self._cancel_event.clear()
 
@@ -136,10 +140,20 @@ class WorkerManager:
             )
             pool.submit(self._process_file, file_rec.id)
 
+    def _ensure_terminal_on_cancel(self, file_id: int):
+        """Move a stuck processing file to cancelled when cancellation is active."""
+        if not self._cancel_event.is_set():
+            return
+        file_rec = db.get_file(file_id)
+        if file_rec and file_rec.status == config.STATUS_PROCESSING:
+            db.mark_file_cancelled(file_id)
+            self._emit_progress(file_id, "cancelled", "Cancelled", 100)
+
     def _process_file(self, file_id: int):
         start_time = time.monotonic()
         try:
             if self._cancel_event.is_set():
+                self._ensure_terminal_on_cancel(file_id)
                 return
 
             file_rec = db.get_file(file_id)
@@ -158,6 +172,7 @@ class WorkerManager:
 
             if not os.path.exists(file_rec.input_file_path):
                 if self._cancel_event.is_set():
+                    self._ensure_terminal_on_cancel(file_id)
                     return
                 db.mark_file_failed(file_id, "Input file not found")
                 self._emit_progress(file_id, "error", "File not found", 100)
@@ -197,6 +212,7 @@ class WorkerManager:
                 self._process_registry.unregister(file_id)
 
             if self._cancel_event.is_set():
+                self._ensure_terminal_on_cancel(file_id)
                 return
 
             file_rec = db.get_file(file_id)
@@ -241,11 +257,13 @@ class WorkerManager:
 
         except InterruptedError:
             logger.info("File %d processing interrupted (cancelled)", file_id)
-            if not self._cancel_event.is_set():
+            file_rec = db.get_file(file_id)
+            if file_rec and file_rec.status != config.STATUS_CANCELLED:
                 db.mark_file_cancelled(file_id)
-                self._emit_progress(file_id, "cancelled", "Cancelled", 100)
+            self._emit_progress(file_id, "cancelled", "Cancelled", 100)
         except Exception as e:
             if self._cancel_event.is_set():
+                self._ensure_terminal_on_cancel(file_id)
                 return
             file_rec = db.get_file(file_id)
             if file_rec and file_rec.status == config.STATUS_CANCELLED:

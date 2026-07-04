@@ -17,6 +17,7 @@ class Job:
     total_files: int
     completed_files: int
     failed_files: int
+    cancelled_files: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -32,6 +33,7 @@ class Job:
             "total_files": self.total_files,
             "completed_files": self.completed_files,
             "failed_files": self.failed_files,
+            "cancelled_files": self.cancelled_files,
         }
 
 
