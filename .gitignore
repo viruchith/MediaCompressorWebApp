@@ -48,4 +48,5 @@ temp/
 *.sqlite
 file_db.db
 instance/
+logs/
 .DS_Store

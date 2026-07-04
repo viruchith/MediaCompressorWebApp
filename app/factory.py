@@ -3,6 +3,7 @@ import logging
 import logging.handlers
 import signal
 import sys
+from pathlib import Path
 
 from flask import Flask, jsonify, render_template_string
 from flask_socketio import SocketIO
@@ -19,6 +20,7 @@ _worker_manager: WorkerManager = None  # type: ignore
 
 def setup_logging():
     level = getattr(logging, config.LOG_LEVEL.upper(), logging.INFO)
+
     if config.LOG_JSON:
         class JsonFormatter(logging.Formatter):
             def format(self, record):
@@ -31,18 +33,33 @@ def setup_logging():
                 if hasattr(record, "file_id"):
                     log_data["file_id"] = record.file_id
                 return json.dumps(log_data)
-        handler = logging.StreamHandler()
-        handler.setFormatter(JsonFormatter())
+
+        formatter = JsonFormatter()
     else:
-        handler = logging.StreamHandler()
-        handler.setFormatter(
-            logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+        formatter = logging.Formatter(
+            "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
         )
 
     root = logging.getLogger()
     root.handlers.clear()
-    root.addHandler(handler)
     root.setLevel(level)
+
+    console = logging.StreamHandler()
+    console.setFormatter(formatter)
+    root.addHandler(console)
+
+    if config.LOG_FILE:
+        log_path = Path(config.LOG_FILE)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        file_handler = logging.handlers.RotatingFileHandler(
+            log_path,
+            maxBytes=config.LOG_MAX_BYTES,
+            backupCount=config.LOG_BACKUP_COUNT,
+            encoding="utf-8",
+        )
+        file_handler.setFormatter(formatter)
+        root.addHandler(file_handler)
+        logging.getLogger(__name__).info("Logging to file: %s", log_path.resolve())
 
 
 def create_app() -> tuple:
@@ -77,10 +94,10 @@ def create_app() -> tuple:
         return (
             render_template_string(
                 "<!DOCTYPE html><html><head><title>404 Not Found</title>"
-                '<link rel="stylesheet" href="{{ url_for(\'static\', filename=\'css/style.css\') }}">'
+                "{% include '_head_common.html' %}"
                 "</head><body><header><h1>404 — Not Found</h1></header>"
                 '<div class="card"><p>The page you requested was not found.</p>'
-                '<a href="/">Back to home</a></div></body></html>'
+                '<a href="/" data-label-icon="back" data-label-text="Back to home"></a></div></body></html>'
             ),
             404,
         )
@@ -93,10 +110,10 @@ def create_app() -> tuple:
         return (
             render_template_string(
                 "<!DOCTYPE html><html><head><title>500 Server Error</title>"
-                '<link rel="stylesheet" href="{{ url_for(\'static\', filename=\'css/style.css\') }}">'
+                "{% include '_head_common.html' %}"
                 "</head><body><header><h1>500 — Internal Server Error</h1></header>"
                 '<div class="card"><p>Something went wrong. Please try again later.</p>'
-                '<a href="/">Back to home</a></div></body></html>'
+                '<a href="/" data-label-icon="back" data-label-text="Back to home"></a></div></body></html>'
             ),
             500,
         )

@@ -141,8 +141,24 @@ function setConnectionStatus(state) {
         offline: 'Offline',
         connecting: 'Connecting…',
     };
+    const iconNames = {
+        online: 'wifi',
+        offline: 'wifi-off',
+        connecting: 'wifi',
+    };
     el.className = `connection-indicator ${state}`;
-    if (label) label.textContent = labels[state] || state;
+    if (label) {
+        label.textContent = labels[state] || state;
+    }
+    if (typeof icon === 'function') {
+        const existing = el.querySelector('.icon');
+        const iconEl = icon(iconNames[state] || 'wifi');
+        if (existing) {
+            existing.outerHTML = iconEl;
+        } else if (label) {
+            label.insertAdjacentHTML('beforebegin', iconEl);
+        }
+    }
 }
 
 async function loadProfiles() {
@@ -238,7 +254,7 @@ async function loadJobs() {
         container.innerHTML = '';
 
         if (!data.jobs || data.jobs.length === 0) {
-            container.innerHTML = '<p>No jobs yet.</p>';
+            container.innerHTML = '<p class="empty-state">' + (typeof icon === 'function' ? icon('jobs') : '') + '<span>No jobs yet.</span></p>';
             return;
         }
 
@@ -265,12 +281,12 @@ async function loadJobs() {
                         <div class="job-meta">${escapeHtml(job.input_folder)} → ${escapeHtml(job.output_folder)}</div>
                     </div>
                     <div class="job-actions">
-                        ${job.status === 'active' ? `<button class="small secondary" onclick="pauseJob(${job.id})">Pause</button>` : ''}
-                        ${job.status === 'paused' ? `<button class="small" onclick="resumeJob(${job.id})">Resume</button>` : ''}
-                        ${job.failed_files > 0 ? `<button class="small" onclick="retryFailed(${job.id})">Retry Failed</button>` : ''}
-                        ${job.status === 'completed' ? `<a class="btn small" href="/api/v1/jobs/${job.id}/manifest" target="_blank">Manifest</a>` : ''}
-                        <a class="btn small secondary" href="/jobs/${job.id}">Details</a>
-                        <button class="small danger" onclick="deleteJob(${job.id})">Delete</button>
+                        ${job.status === 'active' ? `<button class="small secondary" onclick="pauseJob(${job.id})">${btnLabel('pause', 'Pause')}</button>` : ''}
+                        ${job.status === 'paused' ? `<button class="small" onclick="resumeJob(${job.id})">${btnLabel('play', 'Resume')}</button>` : ''}
+                        ${job.failed_files > 0 ? `<button class="small" onclick="retryFailed(${job.id})">${btnLabel('retry', 'Retry Failed')}</button>` : ''}
+                        ${job.status === 'completed' ? `<a class="btn small" href="/api/v1/jobs/${job.id}/manifest" target="_blank">${btnLabel('download', 'Manifest')}</a>` : ''}
+                        <a class="btn small secondary" href="/jobs/${job.id}">${btnLabel('eye', 'Details')}</a>
+                        <button class="small danger" onclick="deleteJob(${job.id})">${btnLabel('trash', 'Delete')}</button>
                     </div>
                 </div>
                 <div class="progress-bar"><div class="progress-fill" style="width:${progress}%"></div></div>
@@ -367,9 +383,9 @@ function updatePagination(data) {
     const el = document.getElementById('file-pagination');
     if (!el) return;
     el.innerHTML = `
-        <button ${data.page <= 1 ? 'disabled' : ''} onclick="changeFilePage(${data.page - 1})">Prev</button>
+        <button ${data.page <= 1 ? 'disabled' : ''} onclick="changeFilePage(${data.page - 1})">${btnLabel('chevron-left', 'Prev')}</button>
         <span>Page ${data.page} of ${data.pages} (${data.total} files)</span>
-        <button ${data.page >= data.pages ? 'disabled' : ''} onclick="changeFilePage(${data.page + 1})">Next</button>
+        <button ${data.page >= data.pages ? 'disabled' : ''} onclick="changeFilePage(${data.page + 1})">${btnLabel('chevron-right', 'Next')}</button>
     `;
 }
 

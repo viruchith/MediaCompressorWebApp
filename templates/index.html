@@ -5,43 +5,45 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Media Compressor</title>
     <script src="{{ url_for('static', filename='vendor/socket.io.min.js') }}"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% include '_head_common.html' %}
 </head>
 <body>
     <header>
         <div class="header-top">
             <h1>Media Compressor <span class="app-version">v{{ app_version }}</span></h1>
-            <span id="connection-indicator" class="connection-indicator connecting" role="status" aria-live="polite">
-                <span class="connection-dot" aria-hidden="true"></span>
-                <span class="connection-label">Connecting…</span>
-            </span>
+            <div class="header-actions">
+                <button type="button" id="theme-toggle" class="theme-toggle secondary" aria-label="Theme"></button>
+                <span id="connection-indicator" class="connection-indicator connecting" role="status" aria-live="polite">
+                    <span class="connection-label">Connecting…</span>
+                </span>
+            </div>
         </div>
         <p>Batch compress images and videos with configurable encoding profiles</p>
     </header>
 
     <div class="card">
-        <h2>New Compression Job</h2>
+        <h2 data-heading-icon="compress" data-heading-text="New Compression Job"></h2>
         <form id="folder-form">
             <div class="form-group">
-                <label for="inputFolderPath">Input Folder Path</label>
+                <label for="inputFolderPath" data-label-icon="folder-in" data-label-text="Input Folder Path"></label>
                 <input type="text" id="inputFolderPath" name="inputFolderPath" required
                        placeholder="C:\Photos\input or /home/user/photos">
             </div>
             <div class="form-group">
-                <label for="outputFolderPath">Output Folder Path</label>
+                <label for="outputFolderPath" data-label-icon="folder-out" data-label-text="Output Folder Path"></label>
                 <input type="text" id="outputFolderPath" name="outputFolderPath" required
                        placeholder="C:\Photos\output or /home/user/photos-compressed">
             </div>
             <div class="form-group">
-                <label for="image-profile">Image Profile</label>
+                <label for="image-profile" data-label-icon="image" data-label-text="Image Profile"></label>
                 <select id="image-profile" name="image_profile"></select>
             </div>
             <div class="form-group">
-                <label for="video-profile">Video Profile</label>
+                <label for="video-profile" data-label-icon="video" data-label-text="Video Profile"></label>
                 <select id="video-profile" name="video_profile"></select>
             </div>
             <div class="form-group">
-                <label for="priority">Priority</label>
+                <label for="priority" data-label-icon="priority" data-label-text="Priority"></label>
                 <select id="priority" name="priority">
                     <option value="0">Low (0)</option>
                     <option value="5" selected>Normal (5)</option>
@@ -51,15 +53,15 @@
             <div class="form-group checkbox-group">
                 <label>
                     <input type="checkbox" id="preserve-metadata" checked>
-                    Preserve metadata (EXIF/XMP)
+                    <span data-label-icon="metadata" data-label-text="Preserve metadata (EXIF/XMP)"></span>
                 </label>
             </div>
 
             <details class="advanced-settings">
-                <summary>Advanced Settings</summary>
+                <summary data-label-icon="settings" data-label-text="Advanced Settings"></summary>
                 <div class="settings-grid">
                     <div class="settings-section">
-                        <h4>Image Settings</h4>
+                        <h4 data-label-icon="image" data-label-text="Image Settings"></h4>
                         <div class="form-group">
                             <label for="image-format">Output Format</label>
                             <select id="image-format">
@@ -85,7 +87,7 @@
                         </div>
                     </div>
                     <div class="settings-section">
-                        <h4>Video Settings</h4>
+                        <h4 data-label-icon="video" data-label-text="Video Settings"></h4>
                         <div class="form-group">
                             <label for="video-codec">Codec</label>
                             <select id="video-codec">
@@ -147,38 +149,42 @@
                 </div>
             </details>
 
-            <button type="submit">Start Compression Job</button>
+            <button type="submit" data-btn-icon="play" data-btn-text="Start Compression Job"></button>
         </form>
     </div>
 
     <div id="status-message"></div>
 
     <div class="card queue-stats-card">
-        <h2>Queue Statistics</h2>
+        <h2 data-heading-icon="stats" data-heading-text="Queue Statistics"></h2>
         <div class="queue-stats" id="queue-counts">
-            <div class="stat-item"><span class="stat-number" id="total-count">0</span><span class="stat-label">Total</span></div>
-            <div class="stat-item"><span class="stat-number" id="pending-count">0</span><span class="stat-label">Pending</span></div>
-            <div class="stat-item"><span class="stat-number" id="processing-count">0</span><span class="stat-label">Processing</span></div>
-            <div class="stat-item"><span class="stat-number" id="completed-count">0</span><span class="stat-label">Completed</span></div>
-            <div class="stat-item"><span class="stat-number" id="error-count">0</span><span class="stat-label">Errors</span></div>
-            <div class="stat-item"><span class="stat-number" id="cancelled-count">0</span><span class="stat-label">Cancelled</span></div>
+            <div class="stat-item"><span class="stat-number" id="total-count">0</span><span class="stat-label" data-stat-icon="stats">Total</span></div>
+            <div class="stat-item"><span class="stat-number" id="pending-count">0</span><span class="stat-label" data-stat-icon="pending">Pending</span></div>
+            <div class="stat-item"><span class="stat-number" id="processing-count">0</span><span class="stat-label" data-stat-icon="processing">Processing</span></div>
+            <div class="stat-item"><span class="stat-number" id="completed-count">0</span><span class="stat-label" data-stat-icon="completed">Completed</span></div>
+            <div class="stat-item"><span class="stat-number" id="error-count">0</span><span class="stat-label" data-stat-icon="error">Errors</span></div>
+            <div class="stat-item"><span class="stat-number" id="cancelled-count">0</span><span class="stat-label" data-stat-icon="cancelled">Cancelled</span></div>
         </div>
         <div class="queue-actions">
-            <button class="cancel-btn" id="cancel-queue-btn">Cancel Queue</button>
-            <button class="danger" id="clear-completed-btn">Clear Completed Files</button>
-            <button class="danger-btn" id="clear-history-btn">Clear All History</button>
+            <button class="cancel-btn" id="cancel-queue-btn" data-btn-icon="stop" data-btn-text="Cancel Queue"></button>
+            <button class="danger" id="clear-completed-btn" data-btn-icon="trash" data-btn-text="Clear Completed Files"></button>
+            <button class="danger-btn" id="clear-history-btn" data-btn-icon="trash-all" data-btn-text="Clear All History"></button>
         </div>
     </div>
 
     <div class="card" id="jobs-section">
-        <h2>Jobs <button class="small secondary" id="refresh-jobs">Refresh</button></h2>
+        <div class="card-title-row">
+            <h2 data-heading-icon="jobs" data-heading-text="Jobs"></h2>
+            <button class="small secondary" id="refresh-jobs" data-btn-icon="refresh" data-btn-text="Refresh"></button>
+        </div>
         <div id="jobs-list"></div>
     </div>
 
     <div class="card">
-        <h2>Compression Queue</h2>
+        <h2 data-heading-icon="queue" data-heading-text="Compression Queue"></h2>
         <div class="filters">
-            <label>Status:
+            <div class="filter-item">
+                <span data-label-icon="filter" data-label-text="Status:"></span>
                 <select id="file-status-filter">
                     <option value="">All</option>
                     <option value="0">Pending</option>
@@ -187,10 +193,11 @@
                     <option value="-1">Error</option>
                     <option value="-3">Cancelled</option>
                 </select>
-            </label>
-            <label>Search:
+            </div>
+            <div class="filter-item">
+                <span data-label-icon="search" data-label-text="Search:"></span>
                 <input type="text" id="file-search" placeholder="Filter by path...">
-            </label>
+            </div>
         </div>
         <ul id="file-list"></ul>
         <div class="pagination" id="file-pagination"></div>

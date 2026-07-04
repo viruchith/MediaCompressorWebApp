@@ -4,21 +4,26 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Encoding Settings — Media Compressor</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% include '_head_common.html' %}
 </head>
 <body>
     <header>
-        <h1>Encoding Settings Reference</h1>
-        <p><a href="/">← Back to Compressor</a></p>
+        <div class="header-top">
+            <h1 data-heading-icon="settings" data-heading-text="Encoding Settings Reference"></h1>
+            <div class="header-actions">
+                <button type="button" id="theme-toggle" class="theme-toggle secondary" aria-label="Theme"></button>
+            </div>
+        </div>
+        <p><a href="/" data-label-icon="back" data-label-text="Back to Compressor"></a></p>
     </header>
 
     <div class="card">
-        <h2>Compression Profiles</h2>
+        <h2 data-heading-icon="compress" data-heading-text="Compression Profiles"></h2>
         <div id="profiles-list">Loading profiles...</div>
     </div>
 
     <div class="card">
-        <h2>Configuration</h2>
+        <h2 data-heading-icon="settings" data-heading-text="Configuration"></h2>
         <p>Environment variables (see <code>config.env.example</code>):</p>
         <table class="detail-table">
             <tr><th>SECRET_KEY</th><td>Flask session secret</td></tr>
@@ -28,6 +33,9 @@
             <tr><th>MAX_RETRIES</th><td>Max retry attempts per file (default: 3)</td></tr>
             <tr><th>PROCESSING_TIMEOUT_MINUTES</th><td>Stale processing timeout (default: 30)</td></tr>
             <tr><th>LOG_LEVEL</th><td>Logging level (default: INFO)</td></tr>
+            <tr><th>LOG_FILE</th><td>Log file path (default: logs/app.log)</td></tr>
+            <tr><th>LOG_MAX_BYTES</th><td>Max log file size before rotation (default: 10MB)</td></tr>
+            <tr><th>LOG_BACKUP_COUNT</th><td>Rotated log files to keep (default: 5)</td></tr>
             <tr><th>HOST / PORT</th><td>Server bind address (default: 0.0.0.0:5000)</td></tr>
         </table>
     </div>

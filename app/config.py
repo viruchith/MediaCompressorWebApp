@@ -16,6 +16,9 @@ class Config:
     PROCESSING_TIMEOUT_MINUTES: int = int(os.getenv("PROCESSING_TIMEOUT_MINUTES", "30"))
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     LOG_JSON: bool = os.getenv("LOG_JSON", "false").lower() in ("1", "true", "yes")
+    LOG_FILE: str = os.getenv("LOG_FILE", "logs/app.log")
+    LOG_MAX_BYTES: int = int(os.getenv("LOG_MAX_BYTES", str(10 * 1024 * 1024)))
+    LOG_BACKUP_COUNT: int = int(os.getenv("LOG_BACKUP_COUNT", "5"))
     HOST: str = os.getenv("HOST", "0.0.0.0")
     PORT: int = int(os.getenv("PORT", "5000"))
 
