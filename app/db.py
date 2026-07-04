@@ -315,16 +315,23 @@ def get_queue_counts() -> Dict[str, int]:
             "SELECT COUNT(*) FROM files WHERE status IN (?, ?)",
             (config.STATUS_ERROR, config.STATUS_PERMANENT_FAIL),
         ).fetchone()[0]
+        cancelled = conn.execute(
+            "SELECT COUNT(*) FROM files WHERE status = ?", (config.STATUS_CANCELLED,)
+        ).fetchone()[0]
         return {
             "total": total,
             "pending": pending,
             "processing": processing,
             "completed": completed,
             "errors": errors,
+            "cancelled": cancelled,
         }
     except Exception as e:
         logger.error("Error getting queue counts: %s", e)
-        return {"total": 0, "pending": 0, "processing": 0, "completed": 0, "errors": 0}
+        return {
+            "total": 0, "pending": 0, "processing": 0,
+            "completed": 0, "errors": 0, "cancelled": 0,
+        }
 
 
 def create_job(
@@ -555,6 +562,16 @@ def reset_file_for_retry(file_id: int):
     conn.commit()
 
 
+def mark_file_cancelled(file_id: int):
+    conn = get_db()
+    conn.execute(
+        """UPDATE files SET status = ?, error_message = 'Cancelled by user',
+           started_at = NULL WHERE id = ?""",
+        (config.STATUS_CANCELLED, file_id),
+    )
+    conn.commit()
+
+
 def retry_failed_files(job_id: int) -> int:
     conn = get_db()
     cursor = conn.execute(
@@ -599,6 +616,34 @@ def clear_completed_files() -> int:
     )
     conn.commit()
     return cursor.rowcount
+
+
+def cancel_queue_files() -> int:
+    """Mark all pending and processing files as cancelled."""
+    conn = get_db()
+    cursor = conn.execute(
+        """UPDATE files SET status = ?, error_message = 'Cancelled by user',
+           started_at = NULL
+           WHERE status IN (?, ?)""",
+        (config.STATUS_CANCELLED, config.STATUS_PENDING, config.STATUS_PROCESSING),
+    )
+    conn.commit()
+    return cursor.rowcount
+
+
+def flush_database() -> int:
+    """Delete all jobs and files, resetting auto-increment counters."""
+    conn = get_db()
+    total = conn.execute("SELECT COUNT(*) FROM files").fetchone()[0]
+    jobs_count = conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
+    conn.execute("DELETE FROM files")
+    conn.execute("DELETE FROM jobs")
+    try:
+        conn.execute("DELETE FROM sqlite_sequence WHERE name IN ('files', 'jobs')")
+    except sqlite3.OperationalError:
+        pass
+    conn.commit()
+    return total + jobs_count
 
 
 def get_global_stats() -> Dict[str, Any]:

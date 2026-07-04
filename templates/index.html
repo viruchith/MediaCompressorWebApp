@@ -151,8 +151,13 @@
             <div class="stat-item"><span class="stat-number" id="processing-count">0</span><span class="stat-label">Processing</span></div>
             <div class="stat-item"><span class="stat-number" id="completed-count">0</span><span class="stat-label">Completed</span></div>
             <div class="stat-item"><span class="stat-number" id="error-count">0</span><span class="stat-label">Errors</span></div>
+            <div class="stat-item"><span class="stat-number" id="cancelled-count">0</span><span class="stat-label">Cancelled</span></div>
         </div>
-        <button class="danger" id="clear-completed-btn">Clear Completed Files</button>
+        <div class="queue-actions">
+            <button class="cancel-btn" id="cancel-queue-btn">Cancel Queue</button>
+            <button class="danger" id="clear-completed-btn">Clear Completed Files</button>
+            <button class="danger-btn" id="clear-history-btn">Clear All History</button>
+        </div>
     </div>
 
     <div class="card" id="jobs-section">
@@ -170,6 +175,7 @@
                     <option value="2">Processing</option>
                     <option value="1">Completed</option>
                     <option value="-1">Error</option>
+                    <option value="-3">Cancelled</option>
                 </select>
             </label>
             <label>Search:

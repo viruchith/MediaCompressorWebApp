@@ -104,6 +104,10 @@ def create_app() -> tuple:
     return app, socketio, _worker_manager
 
 
+def get_worker_manager() -> WorkerManager:
+    return _worker_manager
+
+
 def request_wants_json():
     from flask import request
     return (

@@ -25,6 +25,7 @@ class Config:
     STATUS_ERROR = -1
     STATUS_PROCESSING = 2
     STATUS_PERMANENT_FAIL = -2
+    STATUS_CANCELLED = -3
 
     SUPPORTED_IMAGE_EXTENSIONS = frozenset({
         "jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "webp", "dng", "raw",

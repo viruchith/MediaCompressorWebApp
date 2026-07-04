@@ -25,15 +25,17 @@ function formatBytes(bytes) {
     return (bytes / 1073741824).toFixed(2) + ' GB';
 }
 
-function showStatus(message, isError) {
+function showStatus(message, type) {
     const el = document.getElementById('status-message');
     if (!el) return;
-    el.innerHTML = `<div class="${isError ? 'error' : 'success'}">${escapeHtml(message)}</div>`;
+    const cls = type === 'error' ? 'error' : type === 'warning' ? 'warning' : 'success';
+    el.innerHTML = `<div class="${cls}">${escapeHtml(message)}</div>`;
 }
 
 function getStatusClass(status) {
     const s = parseInt(status);
     if (s === 1) return 'status-completed';
+    if (s === -3) return 'status-cancelled';
     if (s === -1 || s === -2) return 'status-error';
     if (s === 2) return 'status-processing';
     return '';
@@ -44,6 +46,7 @@ function getStatusText(status) {
         case 1: return 'Completed';
         case -1: return 'Error';
         case -2: return 'Permanent Fail';
+        case -3: return 'Cancelled';
         case 2: return 'Processing';
         case 0: return 'Pending';
         default: return 'Unknown';
@@ -197,7 +200,7 @@ async function resumeJob(id) {
 async function retryFailed(id) {
     const resp = await fetch(`/api/v1/jobs/${id}/retry_failed`, { method: 'POST' });
     const data = await resp.json();
-    showStatus(data.message, false);
+    showStatus(data.message, 'success');
     loadJobs();
     loadFiles();
 }
@@ -294,6 +297,10 @@ function updateFileProgress(fileId, status, percent) {
         progressFill.style.width = '100%';
         progressFill.className = 'progress-fill error';
         statusEl.textContent = 'Status: Error';
+    } else if (s === -3) {
+        progressFill.style.width = '100%';
+        progressFill.className = 'progress-fill cancelled';
+        statusEl.textContent = 'Status: Cancelled';
     } else if (s === 2) {
         const pct = percent != null ? percent : 0;
         progressFill.style.width = pct + '%';
@@ -306,10 +313,10 @@ function updateFileProgress(fileId, status, percent) {
 }
 
 function updateQueueCounts(counts) {
-    const fields = ['total', 'pending', 'processing', 'completed', 'errors'];
+    const fields = ['total', 'pending', 'processing', 'completed', 'errors', 'cancelled'];
     fields.forEach(f => {
         const el = document.getElementById(f + '-count');
-        if (el) el.textContent = counts[f];
+        if (el) el.textContent = counts[f] ?? 0;
     });
 }
 
@@ -331,14 +338,14 @@ function initForm() {
             });
             const data = await resp.json();
             if (!resp.ok) {
-                showStatus(data.error || 'Failed to create job', true);
+                showStatus(data.error || 'Failed to create job', 'error');
                 return;
             }
-            showStatus(data.message, false);
+            showStatus(data.message, 'success');
             loadFiles();
             loadJobs();
         } catch (err) {
-            showStatus('Error: ' + err, true);
+            showStatus('Error: ' + err, 'error');
         }
     });
 
@@ -358,8 +365,40 @@ function initForm() {
         if (!confirm('Clear all completed files from the database?')) return;
         const resp = await fetch('/api/v1/clear_completed', { method: 'POST' });
         const data = await resp.json();
-        showStatus(data.message, false);
+        showStatus(data.message, 'success');
         loadFiles();
+    });
+
+    document.getElementById('cancel-queue-btn')?.addEventListener('click', async () => {
+        if (!confirm(
+            'Are you sure you want to cancel all pending and in-progress files? ' +
+            'Files currently being processed will be stopped.'
+        )) return;
+        const resp = await fetch('/api/v1/cancel_queue', { method: 'POST' });
+        const data = await resp.json();
+        if (!resp.ok) {
+            showStatus(data.error || 'Failed to cancel queue', 'error');
+            return;
+        }
+        showStatus(data.message, 'warning');
+        loadFiles();
+        loadJobs();
+    });
+
+    document.getElementById('clear-history-btn')?.addEventListener('click', async () => {
+        if (!confirm(
+            'WARNING: This will stop all processing and permanently delete ALL records ' +
+            'from the database. This cannot be undone. Continue?'
+        )) return;
+        const resp = await fetch('/api/v1/clear_history', { method: 'POST' });
+        const data = await resp.json();
+        if (!resp.ok) {
+            showStatus(data.error || 'Failed to clear history', 'error');
+            return;
+        }
+        showStatus(data.message, 'error');
+        loadFiles();
+        loadJobs();
     });
 
     document.getElementById('file-status-filter')?.addEventListener('change', (e) => {
@@ -416,7 +455,25 @@ socket.on('progress_update', (data) => {
             progressFill.style.width = '100%';
             progressFill.className = 'progress-fill error';
             break;
+        case 'cancelled':
+            fileElement.classList.add('status-cancelled');
+            statusEl.textContent = 'Status: Cancelled — ' + data.message;
+            progressFill.style.width = '100%';
+            progressFill.className = 'progress-fill cancelled';
+            break;
     }
+});
+
+socket.on('queue_cancelled', (data) => {
+    showStatus(data.message, 'warning');
+    loadFiles();
+    loadJobs();
+});
+
+socket.on('history_cleared', (data) => {
+    showStatus(data.message, 'error');
+    loadFiles();
+    loadJobs();
 });
 
 socket.on('queue_counts', updateQueueCounts);

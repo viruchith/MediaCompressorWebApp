@@ -40,6 +40,7 @@ def compress_image(
     output_path: str,
     settings: Dict[str, Any],
     progress_callback: Optional[Callable[[int, str], None]] = None,
+    should_cancel: Optional[Callable[[], bool]] = None,
 ) -> tuple:
     """Compress an image atomically. Returns (out_path, input_hash, output_hash, input_size, output_size, ratio)."""
     _ensure_heif()
@@ -52,6 +53,9 @@ def compress_image(
 
     if progress_callback:
         progress_callback(10, "Computing input hash")
+
+    if should_cancel and should_cancel():
+        raise InterruptedError("Image compression cancelled")
 
     input_hash = compute_file_hash(input_path)
     input_size = os.path.getsize(input_path)
@@ -114,6 +118,9 @@ def compress_image(
 
         if progress_callback:
             progress_callback(60, "Compressing")
+
+        if should_cancel and should_cancel():
+            raise InterruptedError("Image compression cancelled")
 
         fd, tmp_path = tempfile.mkstemp(
             suffix=os.path.splitext(out_path)[1],

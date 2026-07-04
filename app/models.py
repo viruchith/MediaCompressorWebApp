@@ -91,6 +91,7 @@ def status_label(status: int) -> str:
         -1: "error",
         2: "processing",
         -2: "permanent_fail",
+        -3: "cancelled",
     }
     return labels.get(status, "unknown")
 

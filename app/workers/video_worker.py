@@ -90,6 +90,8 @@ def compress_video(
     output_path: str,
     settings: Dict[str, Any],
     progress_callback: Optional[Callable[[int, str], None]] = None,
+    should_cancel: Optional[Callable[[], bool]] = None,
+    on_process: Optional[Callable[[subprocess.Popen], None]] = None,
 ) -> Tuple[str, str, str, int, int, float]:
     """Compress a video atomically. Returns (out_path, input_hash, output_hash, sizes, ratio)."""
     if not is_video_file(input_path):
@@ -124,10 +126,17 @@ def compress_video(
         text=True,
         bufsize=1,
     )
+    if on_process:
+        on_process(proc)
 
     try:
         assert proc.stderr is not None
         for line in proc.stderr:
+            if should_cancel and should_cancel():
+                proc.terminate()
+                proc.wait(timeout=5)
+                raise InterruptedError("Video compression cancelled")
+
             if duration is None:
                 duration = _parse_duration(line)
             current = _parse_time(line)
@@ -136,6 +145,8 @@ def compress_video(
                 progress_callback(pct, f"Encoding {pct}%")
 
         proc.wait()
+        if should_cancel and should_cancel():
+            raise InterruptedError("Video compression cancelled")
         if proc.returncode != 0:
             raise RuntimeError(f"FFmpeg failed with code {proc.returncode}")
 

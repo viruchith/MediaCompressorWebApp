@@ -262,6 +262,26 @@ def clear_completed():
     return jsonify({"message": f"Cleared {deleted} completed files.", "deleted": deleted})
 
 
+@api_bp.route("/cancel_queue", methods=["POST"])
+def cancel_queue():
+    from app.factory import get_worker_manager
+    wm = get_worker_manager()
+    if not wm:
+        return error_response("Worker manager not available", "WORKER_UNAVAILABLE", 503)
+    result = wm.cancel_queue()
+    return jsonify(result)
+
+
+@api_bp.route("/clear_history", methods=["POST"])
+def clear_history():
+    from app.factory import get_worker_manager
+    wm = get_worker_manager()
+    if not wm:
+        return error_response("Worker manager not available", "WORKER_UNAVAILABLE", 503)
+    result = wm.clear_history()
+    return jsonify(result)
+
+
 # --- Deprecated legacy routes ---
 
 @web_bp.route("/files", methods=["GET"])
@@ -283,3 +303,13 @@ def legacy_folder():
 @web_bp.route("/clear_completed", methods=["POST"])
 def legacy_clear_completed():
     return clear_completed()
+
+
+@web_bp.route("/cancel_queue", methods=["POST"])
+def legacy_cancel_queue():
+    return cancel_queue()
+
+
+@web_bp.route("/clear_history", methods=["POST"])
+def legacy_clear_history():
+    return clear_history()

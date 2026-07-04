@@ -351,6 +351,44 @@ button.small {
     word-break: break-all;
 }
 
+#status-message .warning {
+    color: #856404;
+    background: #fff3cd;
+    padding: 10px;
+    border-radius: 4px;
+}
+
+.queue-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+button.cancel-btn {
+    background: #fd7e14;
+}
+
+button.cancel-btn:hover {
+    background: #e8590c;
+}
+
+button.danger-btn {
+    background: #721c24;
+}
+
+button.danger-btn:hover {
+    background: #491217;
+}
+
+.status-cancelled {
+    border-left: 4px solid #fd7e14;
+}
+
+.progress-fill.cancelled {
+    background-color: #fd7e14;
+}
+
 @media (max-width: 600px) {
     body { padding: 12px; }
     .settings-grid { grid-template-columns: 1fr; }
