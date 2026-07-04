@@ -9,7 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Planned
 - Hardware acceleration toggle in the web UI
-- Built-in log rotation
+
+## [2.2.0] - 2026-07-04
+
+### Added
+- SVG icons on buttons, labels, section headings, queue stats, and dynamic job actions (`static/js/icons.js`)
+- Dark theme with header toggle — **System** (auto), **Light**, and **Dark** modes (`static/js/theme.js`)
+- System theme follows `prefers-color-scheme` and updates when OS theme changes
+- Rotating file logging to `logs/app.log` (`LOG_FILE`, `LOG_MAX_BYTES`, `LOG_BACKUP_COUNT`)
+- Shared template partials: `_head_common.html`, `_theme_init.html` (FOUC prevention)
+
+### Changed
+- Full UI restyle via CSS custom properties for light and dark themes
+- Connection indicator uses wifi icons; theme toggle on all main pages
+- Error pages (404/500) include theme and icon assets
 
 ## [2.1.0] - 2026-07-04
 
@@ -78,7 +91,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SQLite queue with real-time WebSocket progress updates
 - Basic web UI with folder input and queue statistics
 
-[Unreleased]: https://github.com/viruchith/MediaCompressorWebApp/compare/v2.1.0...HEAD
+[Unreleased]: https://github.com/viruchith/MediaCompressorWebApp/compare/v2.2.0...HEAD
+[2.2.0]: https://github.com/viruchith/MediaCompressorWebApp/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/viruchith/MediaCompressorWebApp/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/viruchith/MediaCompressorWebApp/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/viruchith/MediaCompressorWebApp/releases/tag/v1.0.0

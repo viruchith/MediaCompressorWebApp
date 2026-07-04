@@ -1,40 +1,41 @@
 # MediaCompressorWebApp — Current State
 
 ## Last Updated
-2026-07-04T12:45:00+05:30
+2026-07-04T13:15:00+05:30
 
 ## Version
-**2.1.0** (see [`VERSION`](VERSION) and [`CHANGELOG.md`](CHANGELOG.md))
+**2.2.0** (see [`VERSION`](VERSION) and [`CHANGELOG.md`](CHANGELOG.md))
+
+## Completed Changes (v2.2.0)
+- [x] SVG icons on buttons, labels, headings, stats, and dynamic job actions
+- [x] Dark theme — System (auto) / Light / Dark with header toggle
+- [x] `prefers-color-scheme` detection and live OS theme sync
+- [x] Rotating file logging (`logs/app.log`, `LOG_FILE`, `LOG_MAX_BYTES`, `LOG_BACKUP_COUNT`)
+- [x] CSS custom properties for full light/dark UI theming
+- [x] Shared `_head_common.html` and `_theme_init.html` partials
 
 ## Completed Changes (v2.1.0)
 - [x] Separate `image_profile` and `video_profile` per job (UI, API, DB, manifest)
-- [x] `POST /api/v1/cancel_queue` — cancels pending/processing files, terminates FFmpeg
-- [x] `POST /api/v1/clear_history` — cancels active work then flushes all jobs and files
-- [x] `STATUS_CANCELLED` (-3) for cancelled files
-- [x] Online/offline WebSocket connection indicator on main page
-- [x] Socket.IO threading async mode + thread-safe emit queue (reliable real-time progress)
-- [x] Job size summaries on job list and detail pages
-- [x] Self-hosted Socket.IO client (no CDN)
-- [x] HTML 404/500 error pages
-- [x] Priority validation, FFmpeg cancel race, crash recovery fixes
+- [x] Queue cancel/clear history, cancelled status, connection indicator
+- [x] Socket.IO threading + thread-safe emits, job size summaries
 
 ## Modified Files (recent)
 
 | File | Change |
 |------|--------|
-| `VERSION` | Bumped to 2.1.0 |
-| `app/compression/settings.py` | Independent image/video profile merging |
-| `app/models.py` | `image_profile`, `video_profile` on Job |
-| `app/db.py` | Profile columns migration, cancel/flush helpers |
-| `app/routes.py` | `image_profile` / `video_profile` on job create |
-| `app/factory.py` | Threading Socket.IO, HTML error handlers |
-| `app/workers/manager.py` | Thread-safe emits, cancel/clear |
-| `app/workers/process_registry.py` | Active subprocess tracking |
-| `templates/index.html` | Dual profiles, connection indicator, queue actions |
-| `templates/job_detail.html` | Stacked profile display |
-| `static/js/app.js` | Profiles, connection status, live progress |
-| `static/css/style.css` | Connection indicator, profile stack styles |
-| `static/vendor/socket.io.min.js` | Bundled Socket.IO client |
+| `VERSION` | Bumped to 2.2.0 |
+| `app/config.py` | `LOG_FILE`, `LOG_MAX_BYTES`, `LOG_BACKUP_COUNT` |
+| `app/factory.py` | `RotatingFileHandler`, themed error pages |
+| `static/js/icons.js` | **New** — inline SVG icons + hydration |
+| `static/js/theme.js` | **New** — theme preference and toggle |
+| `static/css/style.css` | CSS variables, dark theme, icon/button styles |
+| `templates/_head_common.html` | **New** — shared CSS/JS includes |
+| `templates/_theme_init.html` | **New** — anti-FOUC theme script |
+| `templates/index.html` | Icons, theme toggle, header actions |
+| `templates/job_detail.html` | Icons, theme toggle |
+| `templates/settings.html` | Icons, theme toggle, log config docs |
+| `config.env.example` | Log file settings |
+| `.gitignore` | `logs/` directory |
 
 ## API Endpoints (Current)
 
@@ -71,42 +72,28 @@
 
 **WebSocket:** `progress_update`, `queue_counts`, `queue_cancelled`, `history_cleared`, `connection_status`
 
-## Database Schema (Current)
-
-### `jobs` table (key columns)
-| Column | Description |
-|--------|-------------|
-| `profile` | Legacy single profile (set when image/video profiles match) |
-| `image_profile` | Image compression preset name |
-| `video_profile` | Video compression preset name |
-| `image_settings` | JSON effective image encoding settings |
-| `video_settings` | JSON effective video encoding settings |
-
-### File status values
-| Code | Meaning |
-|------|---------|
-| `0` | Pending |
-| `1` | Completed |
-| `2` | Processing |
-| `-1` | Error |
-| `-2` | Permanent fail (max retries) |
-| `-3` | Cancelled |
-
 ## UI Elements
 
+- **Theme toggle** — System / Light / Dark (header, all main pages)
+- **Icons** — buttons, labels, stats, job actions, connection indicator
 - **Image Profile** / **Video Profile** — separate dropdowns on new job form
-- **Connection indicator** — Online / Offline / Connecting (header, main page)
-- **Cancel Queue** — orange button; `POST /api/v1/cancel_queue`
-- **Clear All History** — dark red button; `POST /api/v1/clear_history`
-- **Cancelled** stat counter and file-list filter
-- Job cards show stacked profiles and size-change summary when available
+- **Connection indicator** — Online / Offline / Connecting (main page)
+- **Cancel Queue** / **Clear All History** — queue management buttons
+- Job cards with stacked profiles and size-change summary
+
+## Configuration (logging)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LOG_FILE` | `logs/app.log` | Rotating log path (empty = console only) |
+| `LOG_MAX_BYTES` | `10485760` | Max size before rotation (10 MB) |
+| `LOG_BACKUP_COUNT` | `5` | Rotated files to keep |
 
 ## Known Issues / TODOs
 
 - Image compression cannot be interrupted mid-PIL-save (short window)
 - `clear_history` removed count includes both jobs and files
 - Hardware acceleration toggle not yet exposed in UI
-- Built-in log rotation not yet implemented
 
 ## How to Test
 
@@ -114,14 +101,8 @@
 python run.py
 ```
 
-1. **Separate profiles** — set Image Profile to `web_optimized`, Video Profile to `mobile_friendly`, submit a mixed folder; verify settings in job detail and manifest.
-2. **Connection indicator** — badge shows Online when connected; stop server → Offline.
-3. **Cancel Queue** — queue files, click Cancel Queue, confirm cancelled state and stats.
-4. **Clear History** — flush DB, verify empty lists and zero stats.
-5. **API**
-   ```bash
-   curl -X POST http://localhost:5000/api/v1/jobs \
-     -H "Content-Type: application/json" \
-     -d '{"input_folder":"/path/in","output_folder":"/path/out","image_profile":"balanced","video_profile":"web_optimized"}'
-   curl http://localhost:5000/api/v1/version
-   ```
+1. **Theme** — click header toggle; cycle System → Light → Dark; verify UI colors.
+2. **Icons** — confirm buttons and section headings show icons.
+3. **Logging** — check `logs/app.log` for startup and job messages.
+4. **Connection indicator** — Online when connected; Offline when server stopped.
+5. **Version** — `curl http://localhost:5000/api/v1/version` → `2.2.0`

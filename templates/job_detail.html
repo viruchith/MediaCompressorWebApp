@@ -4,17 +4,22 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Job Detail — Media Compressor</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% include '_head_common.html' %}
     <script src="{{ url_for('static', filename='vendor/socket.io.min.js') }}"></script>
 </head>
 <body>
     <header>
-        <h1>Job Detail</h1>
-        <p><a href="/">← Back to Compressor</a></p>
+        <div class="header-top">
+            <h1 data-heading-icon="jobs" data-heading-text="Job Detail"></h1>
+            <div class="header-actions">
+                <button type="button" id="theme-toggle" class="theme-toggle secondary" aria-label="Theme"></button>
+            </div>
+        </div>
+        <p><a href="/" data-label-icon="back" data-label-text="Back to Compressor"></a></p>
     </header>
 
     {% if not job %}
-    <div class="card"><p>Job not found.</p></div>
+    <div class="card"><p class="empty-state">Job not found.</p></div>
     {% else %}
     <div class="card">
         <h2>Job #{{ job.id }}</h2>
@@ -37,21 +42,21 @@
         </table>
         <div class="job-actions" style="margin-top:16px">
             {% if job.status == 'active' %}
-            <button onclick="apiCall('pause')">Pause</button>
+            <button onclick="apiCall('pause')" data-btn-icon="pause" data-btn-text="Pause"></button>
             {% elif job.status == 'paused' %}
-            <button onclick="apiCall('resume')">Resume</button>
+            <button onclick="apiCall('resume')" data-btn-icon="play" data-btn-text="Resume"></button>
             {% endif %}
             {% if job.failed_files > 0 %}
-            <button onclick="apiCall('retry_failed')">Retry Failed</button>
+            <button onclick="apiCall('retry_failed')" data-btn-icon="retry" data-btn-text="Retry Failed"></button>
             {% endif %}
             {% if job.status == 'completed' %}
-            <a class="btn" href="/api/v1/jobs/{{ job.id }}/manifest" target="_blank">Download Manifest</a>
+            <a class="btn" href="/api/v1/jobs/{{ job.id }}/manifest" target="_blank" data-btn-icon="download" data-btn-text="Download Manifest"></a>
             {% endif %}
         </div>
     </div>
 
     <div class="card">
-        <h2>Files</h2>
+        <h2 data-heading-icon="queue" data-heading-text="Files"></h2>
         <div id="files-container">Loading...</div>
         <div class="pagination" id="pagination"></div>
     </div>
@@ -126,9 +131,9 @@
             container.innerHTML += '</table>';
 
             document.getElementById('pagination').innerHTML = `
-                <button ${data.page <= 1 ? 'disabled' : ''} onclick="changePage(${data.page-1})">Prev</button>
+                <button ${data.page <= 1 ? 'disabled' : ''} onclick="changePage(${data.page-1})">${btnLabel('chevron-left', 'Prev')}</button>
                 <span>Page ${data.page} of ${data.pages}</span>
-                <button ${data.page >= data.pages ? 'disabled' : ''} onclick="changePage(${data.page+1})">Next</button>
+                <button ${data.page >= data.pages ? 'disabled' : ''} onclick="changePage(${data.page+1})">${btnLabel('chevron-right', 'Next')}</button>
             `;
         }
 
