@@ -46,5 +46,6 @@ venv-old/
 tmp/
 temp/
 *.sqlite
+file_db.db
 instance/
 .DS_Store

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Job Detail — Media Compressor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Job Detail</h1>
+        <p><a href="/">← Back to Compressor</a></p>
+    </header>
+
+    {% if not job %}
+    <div class="card"><p>Job not found.</p></div>
+    {% else %}
+    <div class="card">
+        <h2>Job #{{ job.id }}</h2>
+        <table class="detail-table">
+            <tr><th>Status</th><td><span class="badge badge-{{ job.status }}">{{ job.status }}</span></td></tr>
+            <tr><th>Profile</th><td>{{ job.profile or 'custom' }}</td></tr>
+            <tr><th>Input Folder</th><td>{{ job.input_folder }}</td></tr>
+            <tr><th>Output Folder</th><td>{{ job.output_folder }}</td></tr>
+            <tr><th>Created</th><td>{{ job.created_at }}</td></tr>
+            <tr><th>Completed</th><td>{{ job.completed_at or '—' }}</td></tr>
+            <tr><th>Progress</th><td>{{ job.completed_files }}/{{ job.total_files }} completed, {{ job.failed_files }} failed</td></tr>
+        </table>
+        <div class="job-actions" style="margin-top:16px">
+            {% if job.status == 'active' %}
+            <button onclick="apiCall('pause')">Pause</button>
+            {% elif job.status == 'paused' %}
+            <button onclick="apiCall('resume')">Resume</button>
+            {% endif %}
+            {% if job.failed_files > 0 %}
+            <button onclick="apiCall('retry_failed')">Retry Failed</button>
+            {% endif %}
+            {% if job.status == 'completed' %}
+            <a class="btn" href="/api/v1/jobs/{{ job.id }}/manifest" target="_blank">Download Manifest</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Files</h2>
+        <div id="files-container">Loading...</div>
+        <div class="pagination" id="pagination"></div>
+    </div>
+    {% endif %}
+
+    <script>
+        const jobId = {{ job.id if job else 'null' }};
+        let page = 1;
+
+        function formatBytes(bytes) {
+            if (!bytes) return '—';
+            if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / 1048576).toFixed(1) + ' MB';
+        }
+
+        async function loadFiles() {
+            if (!jobId) return;
+            const resp = await fetch(`/api/v1/jobs/${jobId}/files?page=${page}&limit=20`);
+            const data = await resp.json();
+            const container = document.getElementById('files-container');
+            container.innerHTML = '<table class="detail-table"><tr><th>Input</th><th>Status</th><th>Sizes</th><th>Checksums</th></tr>';
+
+            data.files.forEach(f => {
+                container.innerHTML += `<tr>
+                    <td>${f.input_file_path}<br><small>→ ${f.output_file_path || '—'}</small></td>
+                    <td>${f.status_label}</td>
+                    <td>${formatBytes(f.input_size)} → ${formatBytes(f.output_size)}
+                        ${f.compression_ratio != null ? '<br>' + (f.compression_ratio*100).toFixed(0) + '% of original' : ''}</td>
+                    <td class="hash">${f.input_hash ? 'IN: ' + f.input_hash.substring(0,16) + '...' : '—'}
+                        ${f.output_hash ? '<br>OUT: ' + f.output_hash.substring(0,16) + '...' : ''}</td>
+                </tr>`;
+            });
+            container.innerHTML += '</table>';
+
+            document.getElementById('pagination').innerHTML = `
+                <button ${data.page <= 1 ? 'disabled' : ''} onclick="changePage(${data.page-1})">Prev</button>
+                <span>Page ${data.page} of ${data.pages}</span>
+                <button ${data.page >= data.pages ? 'disabled' : ''} onclick="changePage(${data.page+1})">Next</button>
+            `;
+        }
+
+        function changePage(p) { page = p; loadFiles(); }
+
+        async function apiCall(action) {
+            const method = action === 'retry_failed' ? 'POST' : 'PUT';
+            const url = action === 'retry_failed'
+                ? `/api/v1/jobs/${jobId}/retry_failed`
+                : `/api/v1/jobs/${jobId}/${action}`;
+            await fetch(url, { method });
+            location.reload();
+        }
+
+        if (jobId) loadFiles();
+    </script>
+</body>
+</html>

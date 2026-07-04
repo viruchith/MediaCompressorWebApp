@@ -1,72 +1,151 @@
-# Image & Video Compressor Web App
+# MediaCompressorWebApp
 
-A Flask-based web application for batch compressing images and videos using ImageMagick and FFmpeg. The app provides a web interface to queue files for compression, monitor progress, and manage the compression queue.
+A production-grade Flask web application for batch compressing images and videos. Features parallel worker pools, crash recovery, configurable encoding profiles, SHA-256 checksums, and compression manifests.
 
 ## Features
 
-- **Batch Compression:** Add entire folders of images/videos for compression.
-- **Supported Formats:** 
-  - Images: jpg, jpeg, png, gif, bmp, tiff, webp, raw formats, etc.
-  - Videos: mp4, mov, avi, mkv, webm, flv, wmv, m4v, 3gp, mpeg, mpg.
-- **Compression Tools:** Uses [ImageMagick](https://imagemagick.org/) for images and [FFmpeg](https://ffmpeg.org/) for videos.
-- **Progress Tracking:** Real-time queue and progress updates via WebSockets.
-- **Queue Management:** View, clear, and monitor compression jobs.
+- **Parallel processing** — Separate thread pools for images (default 4) and videos (default 2)
+- **Crash recovery** — Stale in-flight files resume on restart; graceful shutdown on SIGTERM/SIGINT
+- **Encoding profiles** — Archival, balanced, web-optimized, mobile-friendly, and more
+- **Advanced settings** — Per-job image/video encoding overrides via UI or API
+- **Archival-grade handling** — SHA-256 checksums, JSON manifests, metadata preservation
+- **Real-time progress** — WebSocket updates with actual FFmpeg encoding percentage for videos
+- **Job management** — Pause, resume, retry failed, download manifest
+- **Backward compatible** — Legacy `/folder`, `/files`, `/queue_counts` routes still work; old DB auto-migrates
 
 ## Requirements
 
-- Python 3.7+
-- [Flask](https://flask.palletsprojects.com/)
-- [Flask-SocketIO](https://flask-socketio.readthedocs.io/)
-- [ImageMagick](https://imagemagick.org/) (`magick` command must be available)
-- [FFmpeg](https://ffmpeg.org/) (`ffmpeg` command must be available)
+- Python 3.9+
+- [FFmpeg](https://ffmpeg.org/) in PATH (for video compression)
+- Pillow handles images on all platforms (ImageMagick optional)
 
 ## Installation
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/yourusername/image-compressor-wapp.git
-   cd image-compressor-wapp
-   ```
+```bash
+git clone https://github.com/viruchith/MediaCompressorWebApp.git
+cd MediaCompressorWebApp
+pip install -r requirements.txt
+```
 
-2. **Install Python dependencies:**
-   ```bash
-    pip install flask flask-socketio Pillow ffmpeg-python
-    ```
+Copy `config.env.example` to `.env` and adjust settings as needed.
 
-3. **Install ImageMagick and FFmpeg:**
-   - **Ubuntu/Debian:**  
-     `sudo apt-get install imagemagick ffmpeg`
-   - **MacOS (Homebrew):**  
-     `brew install imagemagick ffmpeg`
-   - **Windows:**  
-     Download and install from official websites.
+### FFmpeg
+
+- **Ubuntu/Debian:** `sudo apt install ffmpeg`
+- **macOS:** `brew install ffmpeg`
+- **Windows:** Download from https://ffmpeg.org/download.html and add to PATH
 
 ## Usage
 
-1. **Start the server:**
-   ```bash
-   python main.py
-   ```
+```bash
+python run.py
+```
 
-2. **Open the web interface:**
-   - Visit [http://localhost:5000](http://localhost:5000) in your browser.
+Open http://localhost:5000
 
-3. **Add folders for compression:**
-   - Use the web UI to specify input and output folders.
-   - Monitor progress and queue status in real-time.
+1. Enter input and output folder paths
+2. Select a compression profile (or customize advanced settings)
+3. Click **Start Compression Job**
+4. Monitor progress in real time; download manifest when complete
 
-## API Endpoints
+## Configuration
 
-- `GET /files` — List all files in the queue.
-- `GET /queue_counts` — Get queue statistics.
-- `POST /folder` — Add a folder for compression.
-- `POST /clear_completed` — Remove completed jobs from the queue.
+Environment variables (see `config.env.example`):
 
-## Notes
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SECRET_KEY` | (dev default) | Flask session secret |
+| `DB_PATH` | `file_db.db` | SQLite database |
+| `WORKER_COUNT_IMAGES` | `4` | Image worker threads |
+| `WORKER_COUNT_VIDEOS` | `2` | Video worker threads |
+| `MAX_RETRIES` | `3` | Per-file retry limit |
+| `PROCESSING_TIMEOUT_MINUTES` | `30` | Stale job timeout |
+| `LOG_LEVEL` | `INFO` | Log verbosity |
+| `LOG_JSON` | `false` | Enable JSON log format |
+| `HOST` | `0.0.0.0` | Server bind address |
+| `PORT` | `5000` | Server port |
 
-- Output files are saved in the specified output folder, preserving the input folder structure.
-- Compression settings are hardcoded for simplicity (quality 75 for images, CRF 28 for videos).
-- Only supported file types are queued.
+## Compression Profiles
+
+| Profile | Use Case |
+|---------|----------|
+| `archival_lossless` | Lossless PNG + H.265 CRF 0 for long-term archival |
+| `archival_visually_lossless` | Near-lossless WebP + H.265 CRF 18 |
+| `balanced` | Default — good quality/size tradeoff (WebP q75, H.265 CRF 28) |
+| `web_optimized` | H.264 MP4, resized images for web delivery |
+| `mobile_friendly` | 720p video, 1080px max images |
+| `maximum_compression` | Smallest files, lower quality |
+
+## API
+
+All new endpoints are prefixed with `/api/v1/`. Error responses use `{"error": "...", "code": "ERROR_CODE"}`.
+
+### Create a job
+
+```bash
+curl -X POST http://localhost:5000/api/v1/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input_folder": "/path/to/input",
+    "output_folder": "/path/to/output",
+    "profile": "balanced",
+    "priority": 5,
+    "preserve_metadata": true
+  }'
+```
+
+### List profiles
+
+```bash
+curl http://localhost:5000/api/v1/profiles
+```
+
+### Download manifest
+
+```bash
+curl http://localhost:5000/api/v1/jobs/1/manifest
+```
+
+See `CURRENT_STATE.md` for the full endpoint list.
+
+## Architecture
+
+```
+app/
+├── factory.py          # App factory, logging, signals
+├── config.py           # Environment configuration
+├── db.py               # SQLite + migrations + crash recovery
+├── routes.py           # HTTP routes
+├── sockets.py          # WebSocket handlers
+├── workers/
+│   ├── manager.py      # Thread pool dispatcher
+│   ├── image_worker.py # PIL compression
+│   └── video_worker.py # FFmpeg compression
+├── compression/
+│   ├── profiles.py     # Encoding presets
+│   └── settings.py     # Validation & merge
+└── utils/
+    ├── hashing.py      # SHA-256
+    └── manifest.py     # JSON manifests
+```
+
+## WebSocket Events
+
+| Event | Direction | Description |
+|-------|-----------|-------------|
+| `progress_update` | Server → Client | File progress (`file_id`, `status`, `message`, `percent`) |
+| `queue_counts` | Server → Client | Queue statistics |
+| `request_queue_counts` | Client → Server | Request current counts |
+
+## Logging
+
+Set `LOG_JSON=true` for structured JSON logs. For file-based rotation, redirect output:
+
+```bash
+python run.py 2>&1 | rotatelogs access.log 86400
+```
+
+Or configure system logrotate on the log file.
 
 ## License
 
@@ -74,7 +153,7 @@ MIT License
 
 ## Acknowledgements
 
-- [ImageMagick](https://imagemagick.org/)
 - [FFmpeg](https://ffmpeg.org/)
+- [Pillow](https://python-pillow.org/)
 - [Flask](https://flask.palletsprojects.com/)
 - [Flask-SocketIO](https://flask-socketio.readthedocs.io/)

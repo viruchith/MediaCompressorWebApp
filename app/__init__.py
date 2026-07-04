@@ -1,0 +1,1 @@
+"""MediaCompressorWebApp application package."""

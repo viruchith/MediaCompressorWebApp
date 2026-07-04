@@ -1,0 +1,7 @@
+flask>=3.0
+flask-socketio>=5.3
+Pillow>=10.0
+pillow-heif>=0.16
+ffmpeg-python>=0.2
+eventlet>=0.35
+python-dotenv>=1.0
