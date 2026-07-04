@@ -1,35 +1,40 @@
 # MediaCompressorWebApp — Current State
 
 ## Last Updated
-2026-07-04T09:52:00+05:30
+2026-07-04T12:45:00+05:30
 
-## Completed Changes
-- [x] `STATUS_CANCELLED` (-3) added for cancelled files (distinct from permanent fail -2)
-- [x] `POST /api/v1/cancel_queue` — cancels pending/processing files, terminates active FFmpeg processes
+## Version
+**2.1.0** (see [`VERSION`](VERSION) and [`CHANGELOG.md`](CHANGELOG.md))
+
+## Completed Changes (v2.1.0)
+- [x] Separate `image_profile` and `video_profile` per job (UI, API, DB, manifest)
+- [x] `POST /api/v1/cancel_queue` — cancels pending/processing files, terminates FFmpeg
 - [x] `POST /api/v1/clear_history` — cancels active work then flushes all jobs and files
-- [x] Legacy aliases `POST /cancel_queue` and `POST /clear_history`
-- [x] WorkerManager cancellation via `threading.Event` + `ProcessRegistry`
-- [x] Queue stats include `cancelled` count
-- [x] UI: Cancel Queue (orange) and Clear All History (dark red) buttons with confirmations
-- [x] WebSocket events `queue_cancelled` and `history_cleared`
-- [x] Cancelled file styling in file list and status filter
+- [x] `STATUS_CANCELLED` (-3) for cancelled files
+- [x] Online/offline WebSocket connection indicator on main page
+- [x] Socket.IO threading async mode + thread-safe emit queue (reliable real-time progress)
+- [x] Job size summaries on job list and detail pages
+- [x] Self-hosted Socket.IO client (no CDN)
+- [x] HTML 404/500 error pages
+- [x] Priority validation, FFmpeg cancel race, crash recovery fixes
 
-## Modified Files
+## Modified Files (recent)
 
 | File | Change |
 |------|--------|
-| `app/config.py` | Added `STATUS_CANCELLED = -3` |
-| `app/models.py` | Added `cancelled` status label |
-| `app/db.py` | `cancel_queue_files()`, `flush_database()`, `mark_file_cancelled()`, cancelled in queue counts |
-| `app/workers/process_registry.py` | **New** — tracks/terminates active subprocesses |
-| `app/workers/manager.py` | Cancel event, `cancel_queue()`, `clear_history()`, dispatch guards |
-| `app/workers/video_worker.py` | `should_cancel` + `on_process` hooks for FFmpeg termination |
-| `app/workers/image_worker.py` | `should_cancel` checks during compression |
-| `app/factory.py` | Exported `get_worker_manager()` |
-| `app/routes.py` | Cancel/clear API + legacy routes |
-| `templates/index.html` | Cancelled stat, Cancel Queue + Clear All History buttons |
-| `static/js/app.js` | Button handlers, socket events, cancelled status UI |
-| `static/css/style.css` | `.cancel-btn`, `.danger-btn`, `.status-cancelled`, `.warning` |
+| `VERSION` | Bumped to 2.1.0 |
+| `app/compression/settings.py` | Independent image/video profile merging |
+| `app/models.py` | `image_profile`, `video_profile` on Job |
+| `app/db.py` | Profile columns migration, cancel/flush helpers |
+| `app/routes.py` | `image_profile` / `video_profile` on job create |
+| `app/factory.py` | Threading Socket.IO, HTML error handlers |
+| `app/workers/manager.py` | Thread-safe emits, cancel/clear |
+| `app/workers/process_registry.py` | Active subprocess tracking |
+| `templates/index.html` | Dual profiles, connection indicator, queue actions |
+| `templates/job_detail.html` | Stacked profile display |
+| `static/js/app.js` | Profiles, connection status, live progress |
+| `static/css/style.css` | Connection indicator, profile stack styles |
+| `static/vendor/socket.io.min.js` | Bundled Socket.IO client |
 
 ## API Endpoints (Current)
 
@@ -41,7 +46,7 @@
 | GET | `/version` | Version info (legacy) |
 | GET | `/api/v1/version` | Version info |
 | GET | `/api/v1/jobs` | List jobs |
-| POST | `/api/v1/jobs` | Create job |
+| POST | `/api/v1/jobs` | Create job (`image_profile`, `video_profile`) |
 | GET | `/api/v1/jobs/<id>` | Job details |
 | PUT | `/api/v1/jobs/<id>/pause` | Pause job |
 | PUT | `/api/v1/jobs/<id>/resume` | Resume job |
@@ -55,8 +60,8 @@
 | GET | `/api/v1/profiles/<name>` | Profile details |
 | GET | `/api/v1/stats` | Global statistics |
 | POST | `/api/v1/clear_completed` | Delete completed files only |
-| **POST** | **`/api/v1/cancel_queue`** | **Cancel pending + processing files** |
-| **POST** | **`/api/v1/clear_history`** | **Flush entire database** |
+| POST | `/api/v1/cancel_queue` | Cancel pending + processing files |
+| POST | `/api/v1/clear_history` | Flush entire database |
 | GET | `/files` | Legacy file list |
 | GET | `/queue_counts` | Legacy queue counts |
 | POST | `/folder` | Legacy create job |
@@ -68,8 +73,16 @@
 
 ## Database Schema (Current)
 
-Unchanged table structure. File status values:
+### `jobs` table (key columns)
+| Column | Description |
+|--------|-------------|
+| `profile` | Legacy single profile (set when image/video profiles match) |
+| `image_profile` | Image compression preset name |
+| `video_profile` | Video compression preset name |
+| `image_settings` | JSON effective image encoding settings |
+| `video_settings` | JSON effective video encoding settings |
 
+### File status values
 | Code | Meaning |
 |------|---------|
 | `0` | Pending |
@@ -77,22 +90,23 @@ Unchanged table structure. File status values:
 | `2` | Processing |
 | `-1` | Error |
 | `-2` | Permanent fail (max retries) |
-| `-3` | **Cancelled** |
+| `-3` | Cancelled |
 
-## New UI Elements
+## UI Elements
 
-- **Cancel Queue** — orange button in Queue Statistics card; confirms then calls `POST /api/v1/cancel_queue`
-- **Clear All History** — dark red button; warns then flushes entire DB via `POST /api/v1/clear_history`
-- **Cancelled** stat counter in queue statistics
-- **Cancelled** filter option in file list dropdown
-- Orange styling for cancelled files in the queue list
+- **Image Profile** / **Video Profile** — separate dropdowns on new job form
+- **Connection indicator** — Online / Offline / Connecting (header, main page)
+- **Cancel Queue** — orange button; `POST /api/v1/cancel_queue`
+- **Clear All History** — dark red button; `POST /api/v1/clear_history`
+- **Cancelled** stat counter and file-list filter
+- Job cards show stacked profiles and size-change summary when available
 
 ## Known Issues / TODOs
 
-- Image compression cannot be interrupted mid-PIL-save (short window); video FFmpeg processes are terminated immediately
-- `clear_history` counts both jobs and files in the removed total
-- Status `-3` used instead of `-2` for cancelled (`-2` reserved for permanent fail in refactored schema)
-- `clear_history` keeps dispatch paused via `cancel_queue(resume_dispatch=False)` until after DB flush (fixes dispatch race)
+- Image compression cannot be interrupted mid-PIL-save (short window)
+- `clear_history` removed count includes both jobs and files
+- Hardware acceleration toggle not yet exposed in UI
+- Built-in log rotation not yet implemented
 
 ## How to Test
 
@@ -100,21 +114,14 @@ Unchanged table structure. File status values:
 python run.py
 ```
 
-1. **Cancel Queue**
-   - Submit a folder with several files
-   - Click **Cancel Queue** → confirm
-   - Verify pending files show as Cancelled (orange), stats update, `cancelled` count increases
-   - Submit a new folder → processing should resume normally
-
-2. **Clear History**
-   - With files in various states, click **Clear All History** → confirm
-   - Verify file list is empty, all queue stats are zero
-   - Submit a new job → should work from clean state
-
-3. **API**
+1. **Separate profiles** — set Image Profile to `web_optimized`, Video Profile to `mobile_friendly`, submit a mixed folder; verify settings in job detail and manifest.
+2. **Connection indicator** — badge shows Online when connected; stop server → Offline.
+3. **Cancel Queue** — queue files, click Cancel Queue, confirm cancelled state and stats.
+4. **Clear History** — flush DB, verify empty lists and zero stats.
+5. **API**
    ```bash
-   curl -X POST http://localhost:5000/api/v1/cancel_queue
-   curl -X POST http://localhost:5000/api/v1/clear_history
+   curl -X POST http://localhost:5000/api/v1/jobs \
+     -H "Content-Type: application/json" \
+     -d '{"input_folder":"/path/in","output_folder":"/path/out","image_profile":"balanced","video_profile":"web_optimized"}'
+   curl http://localhost:5000/api/v1/version
    ```
-
-4. **Active video cancel** — start a large video encode, click Cancel Queue, verify FFmpeg stops and file is marked cancelled

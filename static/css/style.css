@@ -14,12 +14,92 @@ header {
 }
 
 header h1 {
-    margin: 0 0 4px;
+    margin: 0;
     font-size: 1.75rem;
     display: flex;
     align-items: baseline;
     gap: 10px;
     flex-wrap: wrap;
+}
+
+.header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 4px;
+}
+
+.connection-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 999px;
+    border: 1px solid #dee2e6;
+    background: #fff;
+    color: #495057;
+}
+
+.connection-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.connection-indicator.online {
+    border-color: #b7dfc3;
+    background: #edf9f0;
+    color: #1e7e34;
+}
+
+.connection-indicator.online .connection-dot {
+    background: #28a745;
+}
+
+.connection-indicator.offline {
+    border-color: #f1c0c0;
+    background: #fdf0f0;
+    color: #c82333;
+}
+
+.connection-indicator.offline .connection-dot {
+    background: #dc3545;
+}
+
+.connection-indicator.connecting {
+    border-color: #ffe8a1;
+    background: #fff9e6;
+    color: #856404;
+}
+
+.connection-indicator.connecting .connection-dot {
+    background: #ffc107;
+    animation: connection-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes connection-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+}
+
+.profile-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.job-profiles {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-bottom: 4px;
+    font-size: 0.9rem;
+    color: #495057;
 }
 
 .app-version {

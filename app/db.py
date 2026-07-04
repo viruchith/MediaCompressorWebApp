@@ -186,12 +186,31 @@ def _migrate_v0_to_v1(conn: sqlite3.Connection):
 def _ensure_schema_updates(conn: sqlite3.Connection):
     """Apply incremental schema updates without full version bump."""
     job_cols = _table_columns(conn, "jobs")
+    changed = False
     if "cancelled_files" not in job_cols:
         conn.execute(
             "ALTER TABLE jobs ADD COLUMN cancelled_files INTEGER DEFAULT 0"
         )
-        conn.commit()
+        changed = True
         logger.info("Added jobs.cancelled_files column")
+    if "image_profile" not in job_cols:
+        conn.execute("ALTER TABLE jobs ADD COLUMN image_profile TEXT NULL")
+        changed = True
+        logger.info("Added jobs.image_profile column")
+    if "video_profile" not in job_cols:
+        conn.execute("ALTER TABLE jobs ADD COLUMN video_profile TEXT NULL")
+        changed = True
+        logger.info("Added jobs.video_profile column")
+    if changed:
+        conn.execute(
+            """UPDATE jobs SET image_profile = profile
+               WHERE image_profile IS NULL AND profile IS NOT NULL"""
+        )
+        conn.execute(
+            """UPDATE jobs SET video_profile = profile
+               WHERE video_profile IS NULL AND profile IS NOT NULL"""
+        )
+        conn.commit()
 
 
 def init_db():
@@ -264,6 +283,7 @@ def reset_processing_on_shutdown():
 
 
 def _row_to_job(row: sqlite3.Row) -> Job:
+    keys = row.keys()
     return Job(
         id=row["id"],
         input_folder=row["input_folder"],
@@ -278,6 +298,8 @@ def _row_to_job(row: sqlite3.Row) -> Job:
         completed_files=row["completed_files"],
         failed_files=row["failed_files"],
         cancelled_files=row["cancelled_files"] if "cancelled_files" in row.keys() else 0,
+        image_profile=row["image_profile"] if "image_profile" in keys else None,
+        video_profile=row["video_profile"] if "video_profile" in keys else None,
     )
 
 
@@ -346,18 +368,24 @@ def create_job(
     image_settings: dict,
     video_settings: dict,
     profile: Optional[str],
+    image_profile: Optional[str] = None,
+    video_profile: Optional[str] = None,
     priority: int = 0,
 ) -> int:
     conn = get_db()
     cursor = conn.execute(
-        """INSERT INTO jobs (input_folder, output_folder, image_settings, video_settings, profile)
-           VALUES (?, ?, ?, ?, ?)""",
+        """INSERT INTO jobs
+           (input_folder, output_folder, image_settings, video_settings,
+            profile, image_profile, video_profile)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
         (
             input_folder,
             output_folder,
             json.dumps(image_settings),
             json.dumps(video_settings),
             profile,
+            image_profile,
+            video_profile,
         ),
     )
     job_id = cursor.lastrowid

@@ -99,7 +99,9 @@ def _create_job_from_data(data: dict):
 
     os.makedirs(output_folder, exist_ok=True)
 
-    profile = data.get("profile", "balanced")
+    legacy_profile = data.get("profile", "balanced")
+    image_profile = data.get("image_profile") or legacy_profile
+    video_profile = data.get("video_profile") or legacy_profile
     try:
         priority = int(data.get("priority", 0))
     except (TypeError, ValueError):
@@ -131,7 +133,8 @@ def _create_job_from_data(data: dict):
             }, 400
 
     image_settings, video_settings, errors = get_effective_settings(
-        profile_name=profile,
+        image_profile_name=image_profile,
+        video_profile_name=video_profile,
         user_image_overrides=image_overrides,
         user_video_overrides=video_overrides,
         preserve_metadata=preserve_metadata,
@@ -139,8 +142,17 @@ def _create_job_from_data(data: dict):
     if errors:
         return {"error": "; ".join(errors), "code": "INVALID_SETTINGS"}, 400
 
+    stored_profile = (
+        image_profile if image_profile == video_profile else None
+    )
     job_id = db.create_job(
-        input_folder, output_folder, image_settings, video_settings, profile,
+        input_folder,
+        output_folder,
+        image_settings,
+        video_settings,
+        stored_profile,
+        image_profile=image_profile,
+        video_profile=video_profile,
     )
 
     file_batch = []

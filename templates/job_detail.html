@@ -20,7 +20,12 @@
         <h2>Job #{{ job.id }}</h2>
         <table class="detail-table">
             <tr><th>Status</th><td><span class="badge badge-{{ job.status }}">{{ job.status }}</span></td></tr>
-            <tr><th>Profile</th><td>{{ job.profile or 'custom' }}</td></tr>
+            <tr><th>Profiles</th>
+                <td class="profile-stack">
+                    <div><strong>Image:</strong> {{ job.image_profile or job.profile or 'balanced' }}</div>
+                    <div><strong>Video:</strong> {{ job.video_profile or job.profile or 'balanced' }}</div>
+                </td>
+            </tr>
             <tr><th>Input Folder</th><td>{{ job.input_folder }}</td></tr>
             <tr><th>Output Folder</th><td>{{ job.output_folder }}</td></tr>
             <tr><th>Created</th><td>{{ job.created_at }}</td></tr>

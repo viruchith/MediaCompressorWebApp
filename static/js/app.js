@@ -103,32 +103,66 @@ function getStatusText(status) {
 
 // --- Profiles ---
 
+function profileOptionLabel(name, data) {
+    return `${name.replace(/_/g, ' ')} — ${data.description}`;
+}
+
+function populateProfileSelect(select, selected = 'balanced') {
+    if (!select) return;
+    select.innerHTML = '';
+    for (const [name, data] of Object.entries(profiles)) {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = profileOptionLabel(name, data);
+        select.appendChild(opt);
+    }
+    select.value = selected;
+}
+
+function formatJobProfilesHtml(job) {
+    const img = job.image_profile || job.profile || 'balanced';
+    const vid = job.video_profile || job.profile || 'balanced';
+    const fmt = (p) => escapeHtml(p.replace(/_/g, ' '));
+    if (img === vid) {
+        return `<div class="job-profiles"><div>${fmt(img)}</div></div>`;
+    }
+    return `<div class="job-profiles">
+        <div><strong>Image:</strong> ${fmt(img)}</div>
+        <div><strong>Video:</strong> ${fmt(vid)}</div>
+    </div>`;
+}
+
+function setConnectionStatus(state) {
+    const el = document.getElementById('connection-indicator');
+    if (!el) return;
+    const label = el.querySelector('.connection-label');
+    const labels = {
+        online: 'Online',
+        offline: 'Offline',
+        connecting: 'Connecting…',
+    };
+    el.className = `connection-indicator ${state}`;
+    if (label) label.textContent = labels[state] || state;
+}
+
 async function loadProfiles() {
     try {
         const resp = await fetch('/api/v1/profiles');
         profiles = await resp.json();
-        const select = document.getElementById('profile');
-        if (!select) return;
-        select.innerHTML = '';
-        for (const [name, data] of Object.entries(profiles)) {
-            const opt = document.createElement('option');
-            opt.value = name;
-            opt.textContent = `${name.replace(/_/g, ' ')} — ${data.description}`;
-            select.appendChild(opt);
-        }
-        select.value = 'balanced';
-        applyProfileToForm('balanced');
+        populateProfileSelect(document.getElementById('image-profile'), 'balanced');
+        populateProfileSelect(document.getElementById('video-profile'), 'balanced');
+        applyImageProfileToForm('balanced');
+        applyVideoProfileToForm('balanced');
     } catch (e) {
         console.error('Failed to load profiles:', e);
     }
 }
 
-function applyProfileToForm(profileName) {
+function applyImageProfileToForm(profileName) {
     const profile = profiles[profileName];
     if (!profile) return;
 
     const img = profile.image || {};
-    const vid = profile.video || {};
 
     setVal('image-format', img.output_format || 'webp');
     setVal('image-quality', img.quality || 75);
@@ -136,6 +170,13 @@ function applyProfileToForm(profileName) {
     setVal('image-max-dim', img.max_dimension || '');
     setChecked('image-lossless', img.lossless || false);
     setChecked('image-strip-meta', img.strip_metadata || false);
+}
+
+function applyVideoProfileToForm(profileName) {
+    const profile = profiles[profileName];
+    if (!profile) return;
+
+    const vid = profile.video || {};
 
     setVal('video-codec', vid.codec || 'libx265');
     setVal('video-container', vid.container || 'mkv');
@@ -161,7 +202,8 @@ function getFormSettings() {
     return {
         input_folder: document.getElementById('inputFolderPath').value,
         output_folder: document.getElementById('outputFolderPath').value,
-        profile: document.getElementById('profile').value,
+        image_profile: document.getElementById('image-profile').value,
+        video_profile: document.getElementById('video-profile').value,
         priority: parseInt(document.getElementById('priority').value),
         preserve_metadata: document.getElementById('preserve-metadata').checked,
         image_settings: {
@@ -213,8 +255,8 @@ async function loadJobs() {
                 <div class="job-card-header">
                     <div>
                         <h4>Job #${job.id} <span class="badge badge-${job.status}">${job.status}</span></h4>
+                        ${formatJobProfilesHtml(job)}
                         <div class="job-meta">
-                            ${escapeHtml(job.profile || 'custom')} ·
                             ${job.completed_files}/${job.total_files} done
                             ${job.failed_files ? ` · ${job.failed_files} failed` : ''}
                             ${job.cancelled_files ? ` · ${job.cancelled_files} cancelled` : ''}
@@ -412,8 +454,12 @@ function initForm() {
         }
     });
 
-    document.getElementById('profile')?.addEventListener('change', (e) => {
-        applyProfileToForm(e.target.value);
+    document.getElementById('image-profile')?.addEventListener('change', (e) => {
+        applyImageProfileToForm(e.target.value);
+    });
+
+    document.getElementById('video-profile')?.addEventListener('change', (e) => {
+        applyVideoProfileToForm(e.target.value);
     });
 
     document.getElementById('image-quality')?.addEventListener('input', (e) => {
@@ -555,7 +601,11 @@ socket.on('history_cleared', (data) => {
 });
 
 socket.on('queue_counts', updateQueueCounts);
-socket.on('connection_status', (data) => console.log('Connected:', data.status));
+
+socket.on('connect', () => setConnectionStatus('online'));
+socket.on('disconnect', () => setConnectionStatus('offline'));
+socket.on('connect_error', () => setConnectionStatus('offline'));
+socket.on('connection_status', () => setConnectionStatus('online'));
 
 // --- Init ---
 
@@ -564,6 +614,9 @@ document.addEventListener('DOMContentLoaded', () => {
     loadProfiles();
     loadFiles();
     loadJobs();
+    if (document.getElementById('connection-indicator')) {
+        setConnectionStatus(socket.connected ? 'online' : 'connecting');
+    }
     socket.emit('request_queue_counts');
     setInterval(loadJobs, 30000);
 });

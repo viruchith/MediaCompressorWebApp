@@ -137,21 +137,37 @@ def validate_video_settings(settings: Dict[str, Any]) -> Tuple[Dict[str, Any], l
 
 def get_effective_settings(
     profile_name: Optional[str] = None,
+    image_profile_name: Optional[str] = None,
+    video_profile_name: Optional[str] = None,
     user_image_overrides: Optional[Dict[str, Any]] = None,
     user_video_overrides: Optional[Dict[str, Any]] = None,
     preserve_metadata: bool = True,
 ) -> Tuple[Dict[str, Any], Dict[str, Any], list]:
     """Merge profile defaults with user overrides. Returns (image, video, errors)."""
+    errors: list = []
     image_base = deepcopy(DEFAULT_IMAGE_SETTINGS)
     video_base = deepcopy(DEFAULT_VIDEO_SETTINGS)
     video_base["preserve_metadata"] = preserve_metadata
 
-    if profile_name:
-        profile = PROFILES.get(profile_name)
+    img_prof = image_profile_name or profile_name
+    vid_prof = video_profile_name or profile_name
+
+    if img_prof:
+        profile = PROFILES.get(img_prof)
         if not profile:
-            return image_base, video_base, [f"Unknown profile: {profile_name}"]
-        image_base.update(deepcopy(profile.get("image", {})))
-        video_base.update(deepcopy(profile.get("video", {})))
+            errors.append(f"Unknown image profile: {img_prof}")
+        else:
+            image_base.update(deepcopy(profile.get("image", {})))
+
+    if vid_prof:
+        profile = PROFILES.get(vid_prof)
+        if not profile:
+            errors.append(f"Unknown video profile: {vid_prof}")
+        else:
+            video_base.update(deepcopy(profile.get("video", {})))
+
+    if errors:
+        return image_base, video_base, errors
 
     image_overrides = user_image_overrides or {}
     video_overrides = user_video_overrides or {}
