@@ -8,8 +8,56 @@ let filePageLimit = 20;
 let fileStatusFilter = '';
 let fileSearch = '';
 let jobsPage = 1;
+const fileProgressCache = new Map();
+let refreshFilesTimer = null;
+let refreshJobsTimer = null;
 
 // --- Utilities ---
+
+function debounceRefreshFiles() {
+    if (refreshFilesTimer) clearTimeout(refreshFilesTimer);
+    refreshFilesTimer = setTimeout(() => loadFiles(), 300);
+}
+
+function debounceRefreshJobs() {
+    if (refreshJobsTimer) clearTimeout(refreshJobsTimer);
+    refreshJobsTimer = setTimeout(() => loadJobs(), 300);
+}
+
+function formatSizeChange(inputBytes, outputBytes) {
+    if (inputBytes == null || outputBytes == null) return '';
+    const input = Number(inputBytes);
+    const output = Number(outputBytes);
+    if (!input || input <= 0) return `${formatBytes(output)}`;
+    const ratio = output / input;
+    const pct = Math.abs((ratio - 1) * 100);
+    if (ratio < 0.9995) {
+        return `${formatBytes(input)} → ${formatBytes(output)} (${pct.toFixed(1)}% smaller)`;
+    }
+    if (ratio > 1.0005) {
+        return `${formatBytes(input)} → ${formatBytes(output)} (${pct.toFixed(1)}% larger)`;
+    }
+    return `${formatBytes(input)} → ${formatBytes(output)} (same size)`;
+}
+
+function formatRatioLabel(inputBytes, outputBytes, ratio) {
+    if (inputBytes != null && outputBytes != null) {
+        return formatSizeChange(inputBytes, outputBytes);
+    }
+    if (ratio == null) return '';
+    const r = Number(ratio);
+    const pct = Math.abs((r - 1) * 100);
+    if (r < 0.9995) return `${pct.toFixed(1)}% smaller`;
+    if (r > 1.0005) return `${pct.toFixed(1)}% larger`;
+    return 'same size';
+}
+
+function formatJobSizeSummary(job) {
+    if (!job.total_input_bytes || job.sized_completed_files === 0) return '';
+    const summary = formatSizeChange(job.total_input_bytes, job.total_output_bytes);
+    if (!summary) return '';
+    return `<div class="job-size-summary">${escapeHtml(summary)}</div>`;
+}
 
 function escapeHtml(text) {
     const div = document.createElement('div');
@@ -153,11 +201,14 @@ async function loadJobs() {
         }
 
         data.jobs.forEach(job => {
+            const done = job.completed_files + job.failed_files + (job.cancelled_files || 0);
             const progress = job.total_files > 0
-                ? Math.round(((job.completed_files + job.failed_files) / job.total_files) * 100)
+                ? Math.round((done / job.total_files) * 100)
                 : 0;
+            const sizeSummary = formatJobSizeSummary(job);
             const card = document.createElement('div');
             card.className = 'job-card';
+            card.id = 'job-card-' + job.id;
             card.innerHTML = `
                 <div class="job-card-header">
                     <div>
@@ -166,7 +217,9 @@ async function loadJobs() {
                             ${escapeHtml(job.profile || 'custom')} ·
                             ${job.completed_files}/${job.total_files} done
                             ${job.failed_files ? ` · ${job.failed_files} failed` : ''}
+                            ${job.cancelled_files ? ` · ${job.cancelled_files} cancelled` : ''}
                         </div>
+                        ${sizeSummary}
                         <div class="job-meta">${escapeHtml(job.input_folder)} → ${escapeHtml(job.output_folder)}</div>
                     </div>
                     <div class="job-actions">
@@ -237,9 +290,8 @@ async function loadFiles() {
             li.id = 'file-' + file.id;
             li.className = getStatusClass(file.status);
 
-            const ratioText = file.compression_ratio != null
-                ? ` · ${(file.compression_ratio * 100).toFixed(0)}% of original`
-                : '';
+            const ratioText = formatRatioLabel(file.input_size, file.output_size, file.compression_ratio);
+            const cached = fileProgressCache.get(Number(file.id));
 
             li.innerHTML = `
                 <div><strong>${escapeHtml(file.input_file_path)}</strong></div>
@@ -248,7 +300,7 @@ async function loadFiles() {
                     ${getStatusText(file.status)} · ${file.file_type}
                     ${file.input_size ? ' · ' + formatBytes(file.input_size) : ''}
                     ${file.output_size ? ' → ' + formatBytes(file.output_size) : ''}
-                    ${ratioText}
+                    ${ratioText ? ' · ' + ratioText : ''}
                 </div>
                 <div class="progress-bar">
                     <div class="progress-fill" id="progress-${file.id}" style="width:0%"></div>
@@ -256,7 +308,11 @@ async function loadFiles() {
                 <div class="status-text" id="status-${file.id}">Status: ${getStatusText(file.status)}</div>
             `;
             fileList.appendChild(li);
-            updateFileProgress(file.id, file.status, null);
+            if (cached) {
+                applyProgressUpdate(cached);
+            } else {
+                updateFileProgress(file.id, file.status, null);
+            }
         });
 
         updatePagination(data);
@@ -342,6 +398,13 @@ function initForm() {
                 return;
             }
             showStatus(data.message, 'success');
+            currentFilePage = 1;
+            fileStatusFilter = '';
+            fileSearch = '';
+            const filterEl = document.getElementById('file-status-filter');
+            const searchEl = document.getElementById('file-search');
+            if (filterEl) filterEl.value = '';
+            if (searchEl) searchEl.value = '';
             loadFiles();
             loadJobs();
         } catch (err) {
@@ -417,50 +480,65 @@ function initForm() {
 
 // --- Socket.IO ---
 
-socket.on('progress_update', (data) => {
-    const fileElement = document.getElementById('file-' + data.file_id);
-    if (!fileElement) {
-        loadFiles();
-        return;
+function applyProgressUpdate(data) {
+    const fileId = Number(data.file_id);
+    data = { ...data, file_id: fileId };
+    fileProgressCache.set(fileId, data);
+
+    const fileElement = document.getElementById('file-' + fileId);
+    const statusEl = document.getElementById('status-' + fileId);
+    const progressFill = document.getElementById('progress-' + fileId);
+    if (!fileElement || !statusEl || !progressFill) {
+        return false;
     }
 
-    const statusEl = document.getElementById('status-' + data.file_id);
-    const progressFill = document.getElementById('progress-' + data.file_id);
-    if (!statusEl || !progressFill) return;
-
-    const pct = data.percent != null ? data.percent : (data.status === 'completed' ? 100 : 50);
+    const pct = data.percent != null ? data.percent : (data.status === 'completed' ? 100 : 0);
 
     fileElement.className = '';
     switch (data.status) {
         case 'processing':
             fileElement.classList.add('status-processing');
-            statusEl.textContent = 'Status: Processing — ' + data.message;
+            statusEl.textContent = 'Status: Processing — ' + data.message + ` (${pct}%)`;
             progressFill.style.width = pct + '%';
             progressFill.className = 'progress-fill';
             break;
         case 'completed':
             fileElement.classList.add('status-completed');
             let msg = 'Status: Completed — ' + data.message;
-            if (data.compression_ratio != null) {
-                msg += ` (${formatBytes(data.input_size)} → ${formatBytes(data.output_size)})`;
-            }
+            const sizeLabel = formatRatioLabel(data.input_size, data.output_size, data.compression_ratio);
+            if (sizeLabel) msg += ` · ${sizeLabel}`;
             statusEl.textContent = msg;
             progressFill.style.width = '100%';
             progressFill.className = 'progress-fill complete';
-            loadJobs();
+            fileProgressCache.delete(fileId);
             break;
         case 'error':
             fileElement.classList.add('status-error');
             statusEl.textContent = 'Status: Error — ' + data.message;
             progressFill.style.width = '100%';
             progressFill.className = 'progress-fill error';
+            fileProgressCache.delete(fileId);
             break;
         case 'cancelled':
             fileElement.classList.add('status-cancelled');
             statusEl.textContent = 'Status: Cancelled — ' + data.message;
             progressFill.style.width = '100%';
             progressFill.className = 'progress-fill cancelled';
+            fileProgressCache.delete(fileId);
             break;
+    }
+    return true;
+}
+
+const TERMINAL_PROGRESS = new Set(['completed', 'error', 'cancelled']);
+
+socket.on('progress_update', (data) => {
+    const applied = applyProgressUpdate(data);
+    if (!applied) {
+        debounceRefreshFiles();
+    }
+    if (data.job_id && TERMINAL_PROGRESS.has(data.status)) {
+        debounceRefreshJobs();
     }
 });
 
@@ -487,5 +565,5 @@ document.addEventListener('DOMContentLoaded', () => {
     loadFiles();
     loadJobs();
     socket.emit('request_queue_counts');
-    setInterval(loadJobs, 10000);
+    setInterval(loadJobs, 30000);
 });

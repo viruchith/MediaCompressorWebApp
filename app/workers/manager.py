@@ -1,5 +1,6 @@
 import logging
 import os
+import queue
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -16,8 +17,10 @@ logger = logging.getLogger(__name__)
 
 
 class WorkerManager:
-    def __init__(self, socketio):
+    def __init__(self, socketio, app):
         self.socketio = socketio
+        self.app = app
+        self._emit_queue: queue.SimpleQueue = queue.SimpleQueue()
         self._image_pool = ThreadPoolExecutor(
             max_workers=config.WORKER_COUNT_IMAGES,
             thread_name_prefix="img-worker",
@@ -33,6 +36,7 @@ class WorkerManager:
         self._shutdown_event = threading.Event()
         self._cancel_event = threading.Event()
         self._process_registry = ProcessRegistry()
+        self._emit_thread: Optional[threading.Thread] = None
 
     def start(self):
         if self._running:
@@ -40,6 +44,12 @@ class WorkerManager:
         self._running = True
         self._shutdown_event.clear()
         self._cancel_event.clear()
+        self._emit_thread = threading.Thread(
+            target=self._emit_consumer_loop,
+            name="socket-emit",
+            daemon=True,
+        )
+        self._emit_thread.start()
         self._dispatcher_thread = threading.Thread(
             target=self._dispatcher_loop,
             name="worker-dispatcher",
@@ -147,7 +157,9 @@ class WorkerManager:
         file_rec = db.get_file(file_id)
         if file_rec and file_rec.status == config.STATUS_PROCESSING:
             db.mark_file_cancelled(file_id)
-            self._emit_progress(file_id, "cancelled", "Cancelled", 100)
+            self._emit_progress(
+                file_id, "cancelled", "Cancelled", 100, job_id=file_rec.job_id,
+            )
 
     def _process_file(self, file_id: int):
         start_time = time.monotonic()
@@ -162,12 +174,14 @@ class WorkerManager:
 
             image_settings, video_settings = db.get_job_settings(file_rec.job_id)
             settings = image_settings if file_rec.file_type == "image" else video_settings
+            job_id = file_rec.job_id
 
             self._emit_progress(
                 file_id,
                 "processing",
                 f"Processing {os.path.basename(file_rec.input_file_path)}",
                 0,
+                job_id=job_id,
             )
 
             if not os.path.exists(file_rec.input_file_path):
@@ -175,12 +189,12 @@ class WorkerManager:
                     self._ensure_terminal_on_cancel(file_id)
                     return
                 db.mark_file_failed(file_id, "Input file not found")
-                self._emit_progress(file_id, "error", "File not found", 100)
+                self._emit_progress(file_id, "error", "File not found", 100, job_id=job_id)
                 return
 
             def progress_cb(pct: int, msg: str):
                 if not self._cancel_event.is_set():
-                    self._emit_progress(file_id, "processing", msg, pct)
+                    self._emit_progress(file_id, "processing", msg, pct, job_id=job_id)
 
             def should_cancel() -> bool:
                 return self._cancel_event.is_set()
@@ -230,8 +244,7 @@ class WorkerManager:
             self._emit_progress(
                 file_id,
                 "completed",
-                f"Completed: {os.path.basename(file_rec.input_file_path)} "
-                f"({ratio:.0%} of original)",
+                f"Completed: {os.path.basename(file_rec.input_file_path)}",
                 100,
                 extra={
                     "input_size": inp_size,
@@ -240,6 +253,7 @@ class WorkerManager:
                     "input_hash": inp_hash,
                     "output_hash": out_hash,
                 },
+                job_id=job_id,
             )
 
             job = db.get_job(file_rec.job_id)
@@ -256,7 +270,8 @@ class WorkerManager:
             file_rec = db.get_file(file_id)
             if file_rec and file_rec.status != config.STATUS_CANCELLED:
                 db.mark_file_cancelled(file_id)
-            self._emit_progress(file_id, "cancelled", "Cancelled", 100)
+            jid = file_rec.job_id if file_rec else None
+            self._emit_progress(file_id, "cancelled", "Cancelled", 100, job_id=jid)
         except Exception as e:
             if self._cancel_event.is_set():
                 self._ensure_terminal_on_cancel(file_id)
@@ -270,7 +285,8 @@ class WorkerManager:
             if file_rec and file_rec.retry_count + 1 >= file_rec.max_retries:
                 permanent = True
             db.mark_file_failed(file_id, str(e), permanent=permanent)
-            self._emit_progress(file_id, "error", str(e), 100)
+            jid = file_rec.job_id if file_rec else None
+            self._emit_progress(file_id, "error", str(e), 100, job_id=jid)
         finally:
             with self._lock:
                 self._active.discard(file_id)
@@ -283,6 +299,7 @@ class WorkerManager:
         message: str,
         percent: int,
         extra: Optional[dict] = None,
+        job_id: Optional[int] = None,
     ):
         payload = {
             "file_id": file_id,
@@ -290,6 +307,8 @@ class WorkerManager:
             "message": message,
             "percent": percent,
         }
+        if job_id is not None:
+            payload["job_id"] = job_id
         if extra:
             payload.update(extra)
         self._emit("progress_update", payload)
@@ -299,5 +318,17 @@ class WorkerManager:
         self._emit("queue_counts", counts)
 
     def _emit(self, event: str, payload):
-        """Emit from background threads (dispatcher/workers) to all clients."""
-        self.socketio.emit(event, payload, broadcast=True)
+        """Queue emit for the dedicated consumer (safe from worker threads)."""
+        self._emit_queue.put((event, payload))
+
+    def _emit_consumer_loop(self):
+        while self._running or not self._emit_queue.empty():
+            try:
+                event, payload = self._emit_queue.get(timeout=0.25)
+            except queue.Empty:
+                continue
+            try:
+                with self.app.app_context():
+                    self.socketio.emit(event, payload)
+            except Exception as e:
+                logger.warning("Socket emit failed (%s): %s", event, e)

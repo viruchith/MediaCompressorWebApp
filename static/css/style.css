@@ -225,6 +225,13 @@ button.small {
     color: #666;
 }
 
+.job-size-summary {
+    font-size: 0.9em;
+    color: #2c5282;
+    margin: 4px 0;
+    font-weight: 500;
+}
+
 .job-actions {
     display: flex;
     flex-wrap: wrap;

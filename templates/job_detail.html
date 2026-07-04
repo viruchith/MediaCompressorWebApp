@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Job Detail — Media Compressor</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="{{ url_for('static', filename='vendor/socket.io.min.js') }}"></script>
 </head>
 <body>
     <header>
@@ -25,7 +25,10 @@
             <tr><th>Output Folder</th><td>{{ job.output_folder }}</td></tr>
             <tr><th>Created</th><td>{{ job.created_at }}</td></tr>
             <tr><th>Completed</th><td>{{ job.completed_at or '—' }}</td></tr>
-            <tr><th>Progress</th><td>{{ job.completed_files }}/{{ job.total_files }} completed, {{ job.failed_files }} failed</td></tr>
+            <tr><th>Progress</th><td>{{ job.completed_files }}/{{ job.total_files }} completed, {{ job.failed_files }} failed{% if job.cancelled_files %}, {{ job.cancelled_files }} cancelled{% endif %}</td></tr>
+            {% if job.total_input_bytes and job.sized_completed_files %}
+            <tr><th>Total Size</th><td id="job-size-summary"></td></tr>
+            {% endif %}
         </table>
         <div class="job-actions" style="margin-top:16px">
             {% if job.status == 'active' %}
@@ -53,12 +56,49 @@
 
     <script>
         const jobId = {{ job.id if job else 'null' }};
+        const jobMeta = {{ job | tojson if job else 'null' }};
         let page = 1;
 
         function formatBytes(bytes) {
-            if (!bytes) return '—';
+            if (!bytes && bytes !== 0) return '—';
+            if (bytes < 1024) return bytes + ' B';
             if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
-            return (bytes / 1048576).toFixed(1) + ' MB';
+            if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB';
+            return (bytes / 1073741824).toFixed(2) + ' GB';
+        }
+
+        function formatSizeChange(inputBytes, outputBytes) {
+            if (inputBytes == null || outputBytes == null) return '—';
+            const input = Number(inputBytes);
+            const output = Number(outputBytes);
+            if (!input || input <= 0) return formatBytes(output);
+            const ratio = output / input;
+            const pct = Math.abs((ratio - 1) * 100);
+            if (ratio < 0.9995) {
+                return `${formatBytes(input)} → ${formatBytes(output)} (${pct.toFixed(1)}% smaller)`;
+            }
+            if (ratio > 1.0005) {
+                return `${formatBytes(input)} → ${formatBytes(output)} (${pct.toFixed(1)}% larger)`;
+            }
+            return `${formatBytes(input)} → ${formatBytes(output)} (same size)`;
+        }
+
+        function formatRatioLabel(inputBytes, outputBytes, ratio) {
+            if (inputBytes != null && outputBytes != null) {
+                return formatSizeChange(inputBytes, outputBytes);
+            }
+            if (ratio == null) return '';
+            const r = Number(ratio);
+            const pct = Math.abs((r - 1) * 100);
+            if (r < 0.9995) return `${pct.toFixed(1)}% smaller`;
+            if (r > 1.0005) return `${pct.toFixed(1)}% larger`;
+            return 'same size';
+        }
+
+        function renderJobSizeSummary() {
+            const el = document.getElementById('job-size-summary');
+            if (!el || !jobMeta) return;
+            el.textContent = formatSizeChange(jobMeta.total_input_bytes, jobMeta.total_output_bytes);
         }
 
         async function loadFiles() {
@@ -72,8 +112,8 @@
                 container.innerHTML += `<tr>
                     <td>${f.input_file_path}<br><small>→ ${f.output_file_path || '—'}</small></td>
                     <td>${f.status_label}</td>
-                    <td>${formatBytes(f.input_size)} → ${formatBytes(f.output_size)}
-                        ${f.compression_ratio != null ? '<br>' + (f.compression_ratio*100).toFixed(0) + '% of original' : ''}</td>
+                    <td>${formatSizeChange(f.input_size, f.output_size)}
+                        ${f.compression_ratio != null && !f.input_size ? '<br>' + formatRatioLabel(null, null, f.compression_ratio) : ''}</td>
                     <td class="hash">${f.input_hash ? 'IN: ' + f.input_hash.substring(0,16) + '...' : '—'}
                         ${f.output_hash ? '<br>OUT: ' + f.output_hash.substring(0,16) + '...' : ''}</td>
                 </tr>`;
@@ -98,7 +138,10 @@
             location.reload();
         }
 
-        if (jobId) loadFiles();
+        if (jobId) {
+            renderJobSizeSummary();
+            loadFiles();
+        }
     </script>
 </body>
 </html>

@@ -393,6 +393,29 @@ def get_job(job_id: int) -> Optional[Job]:
     return _row_to_job(row) if row else None
 
 
+def job_to_dict(job: Job) -> Dict[str, Any]:
+    """Serialize a job with aggregated size stats from completed files."""
+    data = job.to_dict()
+    row = get_db().execute(
+        """SELECT COALESCE(SUM(input_size), 0), COALESCE(SUM(output_size), 0), COUNT(*)
+           FROM files WHERE job_id = ? AND status = ?""",
+        (job.id, config.STATUS_COMPLETED),
+    ).fetchone()
+    input_total = int(row[0] or 0)
+    output_total = int(row[1] or 0)
+    data["total_input_bytes"] = input_total
+    data["total_output_bytes"] = output_total
+    data["sized_completed_files"] = int(row[2] or 0)
+    if input_total > 0:
+        ratio = output_total / input_total
+        data["overall_size_ratio"] = round(ratio, 4)
+        data["size_change_percent"] = round((ratio - 1) * 100, 2)
+    else:
+        data["overall_size_ratio"] = None
+        data["size_change_percent"] = None
+    return data
+
+
 def list_jobs(page: int = 1, limit: int = 20) -> PaginatedResult:
     conn = get_db()
     offset = (page - 1) * limit
@@ -403,7 +426,7 @@ def list_jobs(page: int = 1, limit: int = 20) -> PaginatedResult:
     ).fetchall()
     pages = max(1, (total + limit - 1) // limit)
     return PaginatedResult(
-        items=[_row_to_job(r).to_dict() for r in rows],
+        items=[job_to_dict(_row_to_job(r)) for r in rows],
         page=page,
         limit=limit,
         total=total,
@@ -461,10 +484,19 @@ def list_all_files(
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
     total = conn.execute(f"SELECT COUNT(*) FROM files {where}", params).fetchone()[0]
     offset = (page - 1) * limit
-    params.extend([limit, offset])
+    query_params = list(params)
+    query_params.extend([
+        config.STATUS_PROCESSING,
+        config.STATUS_PENDING,
+        limit,
+        offset,
+    ])
     rows = conn.execute(
-        f"SELECT * FROM files {where} ORDER BY priority DESC, created_at ASC LIMIT ? OFFSET ?",
-        params,
+        f"""SELECT * FROM files {where}
+           ORDER BY CASE status WHEN ? THEN 0 WHEN ? THEN 1 ELSE 2 END,
+                    priority DESC, id DESC
+           LIMIT ? OFFSET ?""",
+        query_params,
     ).fetchall()
     pages = max(1, (total + limit - 1) // limit)
     return PaginatedResult(

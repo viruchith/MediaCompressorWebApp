@@ -52,7 +52,7 @@ def create_app() -> tuple:
     app = Flask(__name__, template_folder="../templates", static_folder="../static")
     app.config["SECRET_KEY"] = config.SECRET_KEY
 
-    socketio = SocketIO(app, cors_allowed_origins="*")
+    socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
     app.register_blueprint(web_bp)
     app.register_blueprint(api_bp, url_prefix="/api/v1")
@@ -102,7 +102,7 @@ def create_app() -> tuple:
         )
 
     global _worker_manager
-    _worker_manager = WorkerManager(socketio)
+    _worker_manager = WorkerManager(socketio, app)
 
     def shutdown_handler(signum, frame):
         logger.info("Received signal %s, shutting down gracefully...", signum)

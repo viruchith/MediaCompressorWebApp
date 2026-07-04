@@ -43,7 +43,7 @@ def job_detail_page(job_id):
     job = db.get_job(job_id)
     if not job:
         return render_template("job_detail.html", job=None), 404
-    return render_template("job_detail.html", job=job.to_dict())
+    return render_template("job_detail.html", job=db.job_to_dict(job))
 
 
 @web_bp.route("/version", methods=["GET"])
@@ -83,7 +83,7 @@ def get_job(job_id):
     job = db.get_job(job_id)
     if not job:
         return error_response("Job not found", "JOB_NOT_FOUND", 404)
-    return jsonify(job.to_dict())
+    return jsonify(db.job_to_dict(job))
 
 
 def _create_job_from_data(data: dict):
