@@ -1,10 +1,22 @@
 # MediaCompressorWebApp — Current State
 
 ## Last Updated
-2026-07-04T13:15:00+05:30
+2026-07-23T17:30:00+05:30
 
 ## Version
-**2.2.0** (see [`VERSION`](VERSION) and [`CHANGELOG.md`](CHANGELOG.md))
+**2.3.0** (see [`VERSION`](VERSION) and [`CHANGELOG.md`](CHANGELOG.md))
+
+## Completed Changes (v2.3.0)
+- [x] Processing timeout watchdog — enforces `PROCESSING_TIMEOUT_MINUTES` at runtime
+- [x] Disk space pre-check (`MIN_FREE_DISK_MB`) before starting compression
+- [x] Event-driven dispatcher wake via `notify_new_files()`
+- [x] Per-job fair scheduling with ROW_NUMBER() round-robin
+- [x] Image compression moved to ProcessPoolExecutor (bypasses GIL)
+- [x] Background file scanning — job creation returns instantly
+- [x] Dead letter / poison file detection (`is_poison_file()`)
+- [x] Optimized `get_queue_counts` — single GROUP BY query
+- [x] Hash computation: 1 MB chunks with cancellation support
+- [x] `ProcessRegistry.terminate_by_id()` for targeted timeout recovery
 
 ## Completed Changes (v2.2.0)
 - [x] SVG icons on buttons, labels, headings, stats, and dynamic job actions
@@ -23,19 +35,18 @@
 
 | File | Change |
 |------|--------|
-| `VERSION` | Bumped to 2.2.0 |
-| `app/config.py` | `LOG_FILE`, `LOG_MAX_BYTES`, `LOG_BACKUP_COUNT` |
-| `app/factory.py` | `RotatingFileHandler`, themed error pages |
-| `static/js/icons.js` | **New** — inline SVG icons + hydration |
-| `static/js/theme.js` | **New** — theme preference and toggle |
-| `static/css/style.css` | CSS variables, dark theme, icon/button styles |
-| `templates/_head_common.html` | **New** — shared CSS/JS includes |
-| `templates/_theme_init.html` | **New** — anti-FOUC theme script |
-| `templates/index.html` | Icons, theme toggle, header actions |
-| `templates/job_detail.html` | Icons, theme toggle |
-| `templates/settings.html` | Icons, theme toggle, log config docs |
-| `config.env.example` | Log file settings |
-| `.gitignore` | `logs/` directory |
+| `VERSION` | Bumped to 2.3.0 |
+| `app/config.py` | Added `MIN_FREE_DISK_MB` setting |
+| `app/db.py` | Optimized `get_queue_counts`, fair scheduling, timeout/poison helpers |
+| `app/routes.py` | Background file scanning thread |
+| `app/workers/manager.py` | ProcessPoolExecutor, watchdog, disk check, event-driven dispatch |
+| `app/workers/process_registry.py` | Added `terminate_by_id()` |
+| `app/utils/hashing.py` | 1 MB chunks, cancellation callback |
+| `app/workers/image_worker.py` | Cancellable hash |
+| `app/workers/video_worker.py` | Cancellable hash |
+| `config.env.example` | `MIN_FREE_DISK_MB` |
+| `CHANGELOG.md` | v2.3.0 entry |
+| `README.md` | Updated features, config, version |
 
 ## API Endpoints (Current)
 
@@ -81,6 +92,16 @@
 - **Cancel Queue** / **Clear All History** — queue management buttons
 - Job cards with stacked profiles and size-change summary
 
+## Configuration (worker/resiliency)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WORKER_COUNT_IMAGES` | `4` | Parallel image worker processes (ProcessPool) |
+| `WORKER_COUNT_VIDEOS` | `2` | Parallel video worker threads |
+| `MAX_RETRIES` | `3` | Per-file retry limit before permanent failure |
+| `PROCESSING_TIMEOUT_MINUTES` | `30` | Watchdog terminates stuck workers after N minutes |
+| `MIN_FREE_DISK_MB` | `100` | Minimum free disk space before starting compression |
+
 ## Configuration (logging)
 
 | Variable | Default | Description |
@@ -91,7 +112,7 @@
 
 ## Known Issues / TODOs
 
-- Image compression cannot be interrupted mid-PIL-save (short window)
+- Image compression in process pool lacks granular progress callbacks (shows 0% → 100%)
 - `clear_history` removed count includes both jobs and files
 - Hardware acceleration toggle not yet exposed in UI
 
@@ -105,4 +126,7 @@ python run.py
 2. **Icons** — confirm buttons and section headings show icons.
 3. **Logging** — check `logs/app.log` for startup and job messages.
 4. **Connection indicator** — Online when connected; Offline when server stopped.
-5. **Version** — `curl http://localhost:5000/api/v1/version` → `2.2.0`
+5. **Version** — `curl http://localhost:5000/api/v1/version` → `2.3.0`
+6. **Timeout watchdog** — set `PROCESSING_TIMEOUT_MINUTES=1`, submit a job, kill ffmpeg manually; verify file requeues.
+7. **Disk space** — set `MIN_FREE_DISK_MB=999999` and submit a job; verify instant "Insufficient disk space" error.
+8. **Fair scheduling** — create two jobs simultaneously; verify files interleave from both jobs.

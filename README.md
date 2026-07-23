@@ -1,13 +1,13 @@
 # MediaCompressorWebApp
 
-[![Version](https://img.shields.io/badge/version-2.2.0-blue.svg)](VERSION)
+[![Version](https://img.shields.io/badge/version-2.3.0-blue.svg)](VERSION)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
 [![Flask](https://img.shields.io/badge/Flask-3.0%2B-green.svg)](https://flask.palletsprojects.com/)
 
 > **Batch compress images and videos** with a production-grade Flask web app — parallel workers, crash recovery, encoding profiles, SHA-256 checksums, and real-time progress.
 
-**Author:** [Viruchith Ganesan](https://github.com/viruchith) · **Version:** 2.2.0 · **License:** [GPL-3.0](LICENSE)
+**Author:** [Viruchith Ganesan](https://github.com/viruchith) · **Version:** 2.3.0 · **License:** [GPL-3.0](LICENSE)
 
 ---
 
@@ -64,19 +64,22 @@ Ideal for photographers, archivists, content creators, and anyone who needs repe
 
 | Feature | Description |
 |---------|-------------|
-| **Parallel processing** | Separate thread pools for images (default 4) and videos (default 2) |
+| **Parallel processing** | Process pool for images (bypasses GIL) + thread pool for videos |
+| **Resiliency** | Timeout watchdog, crash recovery, disk space pre-checks, poison file detection |
+| **Fair scheduling** | Round-robin across jobs — no single job monopolizes workers |
 | **Crash recovery** | Stale in-flight files resume on restart; graceful SIGTERM/SIGINT shutdown |
 | **Encoding profiles** | Archival, balanced, web-optimized, mobile-friendly, and more |
 | **Split profiles** | Independent image and video preset per job (`image_profile`, `video_profile`) |
 | **Advanced settings** | Per-job image/video overrides via UI or REST API |
 | **Queue control** | Cancel pending work, clear completed history, or flush entire database |
-| **Archival-grade** | SHA-256 checksums, JSON manifests, metadata preservation |
+| **Archival-grade** | SHA-256 checksums (1 MB streaming), JSON manifests, metadata preservation |
 | **Real-time progress** | WebSocket updates with FFmpeg encoding percentage and live file status |
 | **Connection status** | Online/offline indicator on the main dashboard |
 | **Dark theme** | Light, dark, or system-auto theme with header toggle |
 | **Icon UI** | Self-hosted SVG icons on buttons, labels, stats, and actions |
 | **File logging** | Rotating log file (`logs/app.log`) alongside console output |
 | **Job management** | Pause, resume, retry failed, download manifest, size-change summaries |
+| **Background scanning** | File discovery runs in a background thread — API responds instantly |
 | **Backward compatible** | Legacy routes and automatic DB migration from v1 schema |
 
 ---
@@ -165,10 +168,11 @@ Environment variables (see [`config.env.example`](config.env.example)):
 |----------|---------|-------------|
 | `SECRET_KEY` | *(dev default)* | Flask session secret — **change in production** |
 | `DB_PATH` | `file_db.db` | SQLite database file path |
-| `WORKER_COUNT_IMAGES` | `4` | Parallel image worker threads |
+| `WORKER_COUNT_IMAGES` | `4` | Parallel image worker processes (ProcessPool) |
 | `WORKER_COUNT_VIDEOS` | `2` | Parallel video worker threads |
 | `MAX_RETRIES` | `3` | Per-file retry limit before permanent failure |
-| `PROCESSING_TIMEOUT_MINUTES` | `30` | Reset stale in-flight files after N minutes |
+| `PROCESSING_TIMEOUT_MINUTES` | `30` | Watchdog terminates stuck workers after N minutes |
+| `MIN_FREE_DISK_MB` | `100` | Minimum free disk space (MB) before starting compression |
 | `LOG_LEVEL` | `INFO` | Logging verbosity (`DEBUG`, `INFO`, `WARNING`, …) |
 | `LOG_FILE` | `logs/app.log` | Rotating log file path (set empty to disable file logging) |
 | `LOG_MAX_BYTES` | `10485760` | Max log file size before rotation (10 MB) |
@@ -303,6 +307,7 @@ This project follows [Semantic Versioning](https://semver.org/). The canonical v
 
 | Release | Date | Highlights |
 |---------|------|------------|
+| **2.3.0** | 2026-07-23 | Parallel processing resiliency — process pool, timeout watchdog, fair scheduling, disk checks |
 | **2.2.0** | 2026-07-04 | SVG icon UI, dark/system theme toggle, rotating file logging |
 | **2.1.0** | 2026-07-04 | Split image/video profiles, queue cancel/clear, live connection indicator, progress fixes |
 | **2.0.0** | 2026-07-04 | Major refactor — modular architecture, worker pools, API v1 |
