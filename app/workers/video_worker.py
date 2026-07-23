@@ -106,7 +106,9 @@ def compress_video(
     if progress_callback:
         progress_callback(5, "Computing input hash")
 
-    input_hash = compute_file_hash(input_path)
+    # Pass cancellation callback to hash computation so large file
+    # hashing can be interrupted without waiting for full file read.
+    input_hash = compute_file_hash(input_path, should_cancel=should_cancel)
     input_size = os.path.getsize(input_path)
 
     fd, tmp_path = tempfile.mkstemp(

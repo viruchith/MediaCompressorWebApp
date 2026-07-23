@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import threading
 from flask import Blueprint, jsonify, render_template, request
 
 from app.compression.profiles import PROFILES
@@ -155,30 +156,48 @@ def _create_job_from_data(data: dict):
         video_profile=video_profile,
     )
 
-    file_batch = []
-    for root, _, files in os.walk(input_folder):
-        for filename in files:
-            input_path = os.path.join(root, filename)
-            ext = os.path.splitext(filename)[1][1:].lower()
-            if ext in config.SUPPORTED_IMAGE_EXTENSIONS:
-                ftype = "image"
-            elif ext in config.SUPPORTED_VIDEO_EXTENSIONS:
-                ftype = "video"
-            else:
-                continue
-            relative = os.path.relpath(input_path, input_folder)
-            output_path = os.path.join(output_folder, relative)
-            file_batch.append((input_path, output_path, ftype))
+    # Scan and enqueue files in a background thread so the HTTP response
+    # returns immediately. For large folders with thousands of files, this
+    # avoids blocking the request handler and timing out the client.
+    def _scan_and_enqueue():
+        file_batch = []
+        for root, _, files in os.walk(input_folder):
+            for filename in files:
+                input_path = os.path.join(root, filename)
+                ext = os.path.splitext(filename)[1][1:].lower()
+                if ext in config.SUPPORTED_IMAGE_EXTENSIONS:
+                    ftype = "image"
+                elif ext in config.SUPPORTED_VIDEO_EXTENSIONS:
+                    ftype = "video"
+                else:
+                    continue
+                relative = os.path.relpath(input_path, input_folder)
+                output_path = os.path.join(output_folder, relative)
+                file_batch.append((input_path, output_path, ftype))
 
-    added = db.add_files_batch(
-        job_id, file_batch, priority=priority, max_retries=config.MAX_RETRIES,
+        added = db.add_files_batch(
+            job_id, file_batch, priority=priority, max_retries=config.MAX_RETRIES,
+        )
+        logger.info("Job %d: background scan complete, %d files enqueued", job_id, added)
+
+        # Wake the dispatcher immediately so it picks up new files
+        from app.factory import get_worker_manager
+        wm = get_worker_manager()
+        if wm:
+            wm.notify_new_files()
+
+    scanner = threading.Thread(
+        target=_scan_and_enqueue,
+        name=f"file-scanner-job-{job_id}",
+        daemon=True,
     )
+    scanner.start()
 
-    logger.info("Created job %d with %d files", job_id, added)
+    logger.info("Created job %d (file scanning in background)", job_id)
     return {
-        "message": f"Job created with {added} files queued.",
+        "message": "Job created. File scanning in progress.",
         "job_id": job_id,
-        "files_added": added,
+        "status": "scanning",
     }, 201
 
 
