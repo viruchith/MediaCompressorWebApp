@@ -125,7 +125,7 @@ def create_app() -> tuple:
         logger.info("Received signal %s, shutting down gracefully...", signum)
         db.reset_processing_on_shutdown()
         if _worker_manager:
-            _worker_manager.stop(wait=False)
+            _worker_manager.stop(wait=True)
         db.close_db()
         sys.exit(0)
 

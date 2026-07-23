@@ -101,6 +101,12 @@ function getStatusText(status) {
     }
 }
 
+// Map job status strings to safe CSS class suffixes (whitelist approach to prevent XSS)
+function safeBadgeClass(status) {
+    const allowed = { active: 'active', paused: 'paused', completed: 'completed', scanning: 'scanning', scan_failed: 'scan_failed' };
+    return allowed[status] || 'unknown';
+}
+
 // --- Profiles ---
 
 function profileOptionLabel(name, data) {
@@ -270,7 +276,7 @@ async function loadJobs() {
             card.innerHTML = `
                 <div class="job-card-header">
                     <div>
-                        <h4>Job #${job.id} <span class="badge badge-${job.status}">${job.status}</span></h4>
+                        <h4>Job #${job.id} <span class="badge badge-${safeBadgeClass(job.status)}">${escapeHtml(job.status)}</span></h4>
                         ${formatJobProfilesHtml(job)}
                         <div class="job-meta">
                             ${job.completed_files}/${job.total_files} done
@@ -289,7 +295,7 @@ async function loadJobs() {
                         <button class="small danger" onclick="deleteJob(${job.id})">${btnLabel('trash', 'Delete')}</button>
                     </div>
                 </div>
-                <div class="progress-bar"><div class="progress-fill" style="width:${progress}%"></div></div>
+                <div class="progress-bar" role="progressbar" aria-valuenow="${progress}" aria-valuemin="0" aria-valuemax="100" aria-label="Job #${job.id} progress"><div class="progress-fill" style="width:${progress}%"></div></div>
             `;
             container.appendChild(card);
         });
@@ -360,7 +366,7 @@ async function loadFiles() {
                     ${file.output_size ? ' → ' + formatBytes(file.output_size) : ''}
                     ${ratioText ? ' · ' + ratioText : ''}
                 </div>
-                <div class="progress-bar">
+                <div class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="File compression progress">
                     <div class="progress-fill" id="progress-${file.id}" style="width:0%"></div>
                 </div>
                 <div class="status-text" id="status-${file.id}">Status: ${getStatusText(file.status)}</div>
@@ -400,6 +406,9 @@ function updateFileProgress(fileId, status, percent) {
     const li = document.getElementById('file-' + fileId);
     if (!progressFill || !statusEl) return;
 
+    // Update aria-valuenow on the progress bar container for accessibility
+    const progressBar = progressFill.parentElement;
+
     li.className = getStatusClass(status);
     const s = parseInt(status);
 
@@ -407,22 +416,27 @@ function updateFileProgress(fileId, status, percent) {
         progressFill.style.width = '100%';
         progressFill.className = 'progress-fill complete';
         statusEl.textContent = 'Status: Completed';
+        if (progressBar) progressBar.setAttribute('aria-valuenow', '100');
     } else if (s === -1 || s === -2) {
         progressFill.style.width = '100%';
         progressFill.className = 'progress-fill error';
         statusEl.textContent = 'Status: Error';
+        if (progressBar) progressBar.setAttribute('aria-valuenow', '100');
     } else if (s === -3) {
         progressFill.style.width = '100%';
         progressFill.className = 'progress-fill cancelled';
         statusEl.textContent = 'Status: Cancelled';
+        if (progressBar) progressBar.setAttribute('aria-valuenow', '100');
     } else if (s === 2) {
         const pct = percent != null ? percent : 0;
         progressFill.style.width = pct + '%';
         progressFill.className = 'progress-fill';
         statusEl.textContent = `Status: Processing (${pct}%)`;
+        if (progressBar) progressBar.setAttribute('aria-valuenow', String(pct));
     } else {
         progressFill.style.width = '0%';
         statusEl.textContent = 'Status: Pending';
+        if (progressBar) progressBar.setAttribute('aria-valuenow', '0');
     }
 }
 
@@ -455,7 +469,12 @@ function initForm() {
                 showStatus(data.error || 'Failed to create job', 'error');
                 return;
             }
-            showStatus(data.message, 'success');
+            // Handle background scanning status — show "scanning" feedback
+            if (data.status === 'scanning') {
+                showStatus(`Job #${data.job_id} created — scanning files in background…`, 'success');
+            } else {
+                showStatus(data.message, 'success');
+            }
             currentFilePage = 1;
             fileStatusFilter = '';
             fileSearch = '';
@@ -618,6 +637,18 @@ socket.on('history_cleared', (data) => {
 
 socket.on('queue_counts', updateQueueCounts);
 
+// Real-time job status push — replaces 30s polling
+socket.on('job_updated', (job) => {
+    debounceRefreshJobs();
+});
+
+// Notification when background file scanning completes for a new job
+socket.on('job_scan_complete', (data) => {
+    showStatus(`Job #${data.job_id}: ${data.files_added} file(s) found and queued.`, 'success');
+    loadFiles();
+    loadJobs();
+});
+
 socket.on('connect', () => setConnectionStatus('online'));
 socket.on('disconnect', () => setConnectionStatus('offline'));
 socket.on('connect_error', () => setConnectionStatus('offline'));
@@ -634,5 +665,6 @@ document.addEventListener('DOMContentLoaded', () => {
         setConnectionStatus(socket.connected ? 'online' : 'connecting');
     }
     socket.emit('request_queue_counts');
-    setInterval(loadJobs, 30000);
+    // Fallback polling at 2 minutes — primary updates come via WebSocket push
+    setInterval(loadJobs, 120000);
 });

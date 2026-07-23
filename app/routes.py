@@ -57,6 +57,35 @@ def api_version():
     return jsonify(get_version_info())
 
 
+@api_bp.route("/health", methods=["GET"])
+@web_bp.route("/healthz", methods=["GET"])
+def health_check():
+    """Health check endpoint for monitoring and load balancers.
+
+    Returns 200 with basic status when the app is responsive and the
+    database is accessible. Returns 503 if the DB is unreachable.
+    """
+    try:
+        counts = db.get_queue_counts()
+        from app.factory import get_worker_manager
+        wm = get_worker_manager()
+        return jsonify({
+            "status": "healthy",
+            "version": VERSION,
+            "database": "ok",
+            "workers": {
+                "running": wm is not None and wm._running,
+                "active_files": len(wm._active) if wm else 0,
+            },
+            "queue": counts,
+        })
+    except Exception as e:
+        return jsonify({
+            "status": "unhealthy",
+            "error": str(e),
+        }), 503
+
+
 def get_version_info():
     return {
         "version": VERSION,
@@ -160,31 +189,40 @@ def _create_job_from_data(data: dict):
     # returns immediately. For large folders with thousands of files, this
     # avoids blocking the request handler and timing out the client.
     def _scan_and_enqueue():
-        file_batch = []
-        for root, _, files in os.walk(input_folder):
-            for filename in files:
-                input_path = os.path.join(root, filename)
-                ext = os.path.splitext(filename)[1][1:].lower()
-                if ext in config.SUPPORTED_IMAGE_EXTENSIONS:
-                    ftype = "image"
-                elif ext in config.SUPPORTED_VIDEO_EXTENSIONS:
-                    ftype = "video"
-                else:
-                    continue
-                relative = os.path.relpath(input_path, input_folder)
-                output_path = os.path.join(output_folder, relative)
-                file_batch.append((input_path, output_path, ftype))
+        try:
+            file_batch = []
+            for root, _, files in os.walk(input_folder):
+                for filename in files:
+                    input_path = os.path.join(root, filename)
+                    ext = os.path.splitext(filename)[1][1:].lower()
+                    if ext in config.SUPPORTED_IMAGE_EXTENSIONS:
+                        ftype = "image"
+                    elif ext in config.SUPPORTED_VIDEO_EXTENSIONS:
+                        ftype = "video"
+                    else:
+                        continue
+                    relative = os.path.relpath(input_path, input_folder)
+                    output_path = os.path.join(output_folder, relative)
+                    file_batch.append((input_path, output_path, ftype))
 
-        added = db.add_files_batch(
-            job_id, file_batch, priority=priority, max_retries=config.MAX_RETRIES,
-        )
-        logger.info("Job %d: background scan complete, %d files enqueued", job_id, added)
+            added = db.add_files_batch(
+                job_id, file_batch, priority=priority, max_retries=config.MAX_RETRIES,
+            )
+            logger.info("Job %d: background scan complete, %d files enqueued", job_id, added)
 
-        # Wake the dispatcher immediately so it picks up new files
-        from app.factory import get_worker_manager
-        wm = get_worker_manager()
-        if wm:
-            wm.notify_new_files()
+            # Wake the dispatcher immediately so it picks up new files
+            from app.factory import get_worker_manager
+            wm = get_worker_manager()
+            if wm:
+                wm.notify_new_files()
+                # Emit a socket event so the UI knows scanning finished
+                wm._emit("job_scan_complete", {
+                    "job_id": job_id, "files_added": added,
+                })
+        except Exception as e:
+            logger.error("Job %d: background scan failed: %s", job_id, e)
+            # Mark job as failed so the UI can reflect the error
+            db.update_job_status(job_id, "scan_failed")
 
     scanner = threading.Thread(
         target=_scan_and_enqueue,

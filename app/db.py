@@ -3,7 +3,7 @@ import logging
 import os
 import sqlite3
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.config import config
@@ -561,7 +561,7 @@ def get_pending_files(limit: int = 50) -> List[FileRecord]:
 def claim_file(file_id: int) -> bool:
     """Atomically claim a file for processing."""
     conn = get_db()
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     cursor = conn.execute(
         """UPDATE files SET status = ?, started_at = ?
            WHERE id = ? AND status = ?""",
@@ -581,7 +581,7 @@ def mark_file_completed(
     compression_ratio: float,
 ):
     conn = get_db()
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     file_row = conn.execute(
         "SELECT job_id, status FROM files WHERE id = ?", (file_id,)
     ).fetchone()
@@ -686,7 +686,7 @@ def retry_failed_files(job_id: int) -> int:
 
 def update_job_status(job_id: int, status: str):
     conn = get_db()
-    now = datetime.utcnow().isoformat() if status == "completed" else None
+    now = datetime.now(timezone.utc).isoformat() if status == "completed" else None
     if now:
         conn.execute(
             "UPDATE jobs SET status = ?, completed_at = ? WHERE id = ?",
@@ -807,7 +807,7 @@ def _maybe_complete_job(conn: sqlite3.Connection, job_id: int):
     if done >= row["total_files"]:
         conn.execute(
             "UPDATE jobs SET status = 'completed', completed_at = ? WHERE id = ?",
-            (datetime.utcnow().isoformat(), job_id),
+            (datetime.now(timezone.utc).isoformat(), job_id),
         )
 
 
@@ -824,7 +824,7 @@ def get_timed_out_files(timeout_minutes: int) -> List[FileRecord]:
     and need to be recovered.
     """
     conn = get_db()
-    cutoff = (datetime.utcnow() - timedelta(minutes=timeout_minutes)).isoformat()
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=timeout_minutes)).isoformat()
     rows = conn.execute(
         """SELECT * FROM files
            WHERE status = ? AND started_at IS NOT NULL AND started_at < ?""",

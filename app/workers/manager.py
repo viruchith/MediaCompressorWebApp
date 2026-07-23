@@ -1,4 +1,5 @@
 import logging
+import multiprocessing
 import os
 import queue
 import shutil
@@ -21,6 +22,10 @@ logger = logging.getLogger(__name__)
 # Configurable via MIN_FREE_DISK_MB environment variable (default: 100 MB).
 MIN_FREE_DISK_BYTES = config.MIN_FREE_DISK_MB * 1024 * 1024
 
+# Use 'spawn' start method for ProcessPoolExecutor to avoid inheriting
+# the parent's SQLite connections and threading.local state via fork().
+_MP_CONTEXT = multiprocessing.get_context("spawn")
+
 
 class WorkerManager:
     def __init__(self, socketio, app):
@@ -29,8 +34,10 @@ class WorkerManager:
         self._emit_queue: queue.SimpleQueue = queue.SimpleQueue()
         # Use ProcessPoolExecutor for images to bypass the GIL during
         # CPU-bound Pillow operations (each image compresses in its own process).
+        # Uses 'spawn' context to avoid inheriting parent's DB connections.
         self._image_pool = ProcessPoolExecutor(
             max_workers=config.WORKER_COUNT_IMAGES,
+            mp_context=_MP_CONTEXT,
         )
         self._video_pool = ThreadPoolExecutor(
             max_workers=config.WORKER_COUNT_VIDEOS,
@@ -81,6 +88,9 @@ class WorkerManager:
             self._dispatcher_thread.join(timeout=5)
         self._image_pool.shutdown(wait=wait, cancel_futures=True)
         self._video_pool.shutdown(wait=wait, cancel_futures=False)
+        # Drain the emit queue so pending progress events are delivered
+        if self._emit_thread and self._emit_thread.is_alive():
+            self._emit_thread.join(timeout=3)
         logger.info("Worker manager stopped")
 
     def cancel_queue(self, resume_dispatch: bool = True) -> dict:
@@ -325,6 +335,8 @@ class WorkerManager:
                     logger.warning(
                         "Failed to save manifest for job %d: %s", file_rec.job_id, e,
                     )
+            # Push job state to clients so UI updates without polling
+            self._emit_job_update(file_rec.job_id)
 
         except InterruptedError:
             logger.info("File %d processing interrupted (cancelled)", file_id)
@@ -454,6 +466,8 @@ class WorkerManager:
                     logger.warning(
                         "Failed to save manifest for job %d: %s", file_rec.job_id, e,
                     )
+            # Push job state to clients so UI updates without polling
+            self._emit_job_update(file_rec.job_id)
 
         except InterruptedError:
             logger.info("File %d processing interrupted (cancelled)", file_id)
@@ -506,6 +520,16 @@ class WorkerManager:
     def _emit_queue_counts(self):
         counts = db.get_queue_counts()
         self._emit("queue_counts", counts)
+
+    def _emit_job_update(self, job_id: int):
+        """Push job status change to connected clients via WebSocket.
+
+        Eliminates the need for 30-second polling on the frontend —
+        clients receive immediate notification when a job's state changes.
+        """
+        job = db.get_job(job_id)
+        if job:
+            self._emit("job_updated", db.job_to_dict(job))
 
     def _emit(self, event: str, payload):
         """Queue emit for the dedicated consumer (safe from worker threads)."""

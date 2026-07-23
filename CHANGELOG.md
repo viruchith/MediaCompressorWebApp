@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Health check endpoint** — `GET /healthz` and `GET /api/v1/health` for monitoring and load balancers
+- **Dockerfile** with multi-stage build, non-root user, and built-in health check
+- **`.dockerignore`** for lean container builds
+- **GitHub Actions CI** workflow — lint (flake8), test (pytest), and Docker build verification
+- **Test suite** — 30 unit/integration tests covering DB, API, utilities, and workers
+- **`requirements-dev.txt`** for development dependencies (pytest, flake8)
+- **WebSocket `job_updated` event** — pushes job state changes to clients in real time
+- **WebSocket `job_scan_complete` event** — notifies UI when background file scanning finishes
+- **XSS protection** — `safeBadgeClass()` whitelist prevents injection via job status badges
+- **Accessibility** — progress bars now include `role="progressbar"`, `aria-valuenow`, `aria-valuemin`, `aria-valuemax`
+- **Scanning status UI** — shows "scanning files in background…" message after job creation
+
+### Changed
+- Replaced deprecated `datetime.utcnow()` with `datetime.now(timezone.utc)` (Python 3.12+ compatible)
+- `ProcessPoolExecutor` now uses `spawn` multiprocessing context to prevent inheriting parent DB connections
+- Background file scanner wrapped in `try/except` — errors are logged and job marked `scan_failed`
+- Graceful shutdown now waits for emit queue to drain (prevents lost progress events)
+- Frontend job polling reduced from 30s to 120s fallback (primary updates via WebSocket push)
+
 ### Planned
 - Hardware acceleration toggle in the web UI
 
