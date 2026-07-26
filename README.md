@@ -1,13 +1,13 @@
 # MediaCompressorWebApp
 
-[![Version](https://img.shields.io/badge/version-2.3.0-blue.svg)](VERSION)
+[![Version](https://img.shields.io/badge/version-2.4.0-blue.svg)](VERSION)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
 [![Flask](https://img.shields.io/badge/Flask-3.0%2B-green.svg)](https://flask.palletsprojects.com/)
 
-> **Batch compress images and videos** with a production-grade Flask web app — parallel workers, crash recovery, encoding profiles, SHA-256 checksums, and real-time progress.
+> **Batch compress images and videos** with a production-grade Flask web app — parallel workers, hardware-accelerated encoding, crash recovery, encoding profiles, SHA-256 checksums, and real-time progress.
 
-**Author:** [Viruchith Ganesan](https://github.com/viruchith) · **Version:** 2.3.0 · **License:** [GPL-3.0](LICENSE)
+**Author:** [Viruchith Ganesan](https://github.com/viruchith) · **Version:** 2.4.0 · **License:** [GPL-3.0](LICENSE)
 
 ---
 
@@ -64,6 +64,8 @@ Ideal for photographers, archivists, content creators, and anyone who needs repe
 
 | Feature | Description |
 |---------|-------------|
+| **Hardware acceleration** | Auto-detects GPU and uses VideoToolbox / NVENC / QSV / AMF with SW fallback |
+| **Adaptive scaling** | Auto-tunes worker pool sizes based on CPU cores and available RAM |
 | **Parallel processing** | Process pool for images (bypasses GIL) + thread pool for videos |
 | **Resiliency** | Timeout watchdog, crash recovery, disk space pre-checks, poison file detection |
 | **Fair scheduling** | Round-robin across jobs — no single job monopolizes workers |
@@ -80,6 +82,7 @@ Ideal for photographers, archivists, content creators, and anyone who needs repe
 | **File logging** | Rotating log file (`logs/app.log`) alongside console output |
 | **Job management** | Pause, resume, retry failed, download manifest, size-change summaries |
 | **Background scanning** | File discovery runs in a background thread — API responds instantly |
+| **Health checks** | `/healthz` and `/api/v1/health` endpoints for monitoring |
 | **Backward compatible** | Legacy routes and automatic DB migration from v1 schema |
 
 ---
@@ -170,6 +173,8 @@ Environment variables (see [`config.env.example`](config.env.example)):
 | `DB_PATH` | `file_db.db` | SQLite database file path |
 | `WORKER_COUNT_IMAGES` | `4` | Parallel image worker processes (ProcessPool) |
 | `WORKER_COUNT_VIDEOS` | `2` | Parallel video worker threads |
+| `AUTO_SCALE` | `true` | Override static worker counts with hardware-detected recommendations |
+| `HW_ACCEL_MODE` | `auto` | Hardware acceleration: `auto` (detect), `force`, or `off` |
 | `MAX_RETRIES` | `3` | Per-file retry limit before permanent failure |
 | `PROCESSING_TIMEOUT_MINUTES` | `30` | Watchdog terminates stuck workers after N minutes |
 | `MIN_FREE_DISK_MB` | `100` | Minimum free disk space (MB) before starting compression |
@@ -283,6 +288,7 @@ MediaCompressorWebApp/
 │   ├── factory.py          # Flask app factory, logging, signals
 │   ├── version.py          # VERSION, author, copyright metadata
 │   ├── config.py           # Environment configuration
+│   ├── hardware.py         # Hardware auto-detection & adaptive scaling
 │   ├── db.py               # SQLite, migrations, crash recovery
 │   ├── routes.py           # HTTP routes (web + API v1)
 │   ├── sockets.py          # WebSocket handlers
@@ -307,6 +313,7 @@ This project follows [Semantic Versioning](https://semver.org/). The canonical v
 
 | Release | Date | Highlights |
 |---------|------|------------|
+| **2.4.0** | 2026-07-26 | Hardware auto-detection, adaptive scaling, platform-aware HW encoding (VideoToolbox/NVENC/QSV/AMF) |
 | **2.3.0** | 2026-07-23 | Parallel processing resiliency — process pool, timeout watchdog, fair scheduling, disk checks |
 | **2.2.0** | 2026-07-04 | SVG icon UI, dark/system theme toggle, rotating file logging |
 | **2.1.0** | 2026-07-04 | Split image/video profiles, queue cancel/clear, live connection indicator, progress fixes |
