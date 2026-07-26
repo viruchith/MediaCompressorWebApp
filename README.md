@@ -328,10 +328,11 @@ See [`CHANGELOG.md`](CHANGELOG.md) for full release notes.
 
 Contributions are welcome! Please:
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/my-feature`)
-3. Commit your changes with clear messages
-4. Open a Pull Request against `main`
+1. Read [`TECHNICAL.md`](TECHNICAL.md) for architecture details and coding conventions
+2. Fork the repository
+3. Create a feature branch (`git checkout -b feature/my-feature`)
+4. Commit your changes with clear messages
+5. Open a Pull Request against `main`
 
 By contributing, you agree that your contributions will be licensed under the **GPL-3.0** license.
 
