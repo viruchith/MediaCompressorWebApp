@@ -7,8 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Planned
-- Hardware acceleration toggle in the web UI
+## [2.4.0] - 2026-07-26
+
+### Added
+- **Hardware auto-detection module** (`app/hardware.py`) — universal cross-platform detection of CPU (physical/logical/P-E cores), RAM, GPU (vendor + VRAM), and FFmpeg HW encoders
+- **Adaptive worker scaling** (`AUTO_SCALE=true`) — dynamically sizes image/video worker pools based on detected hardware instead of static config
+- **Platform-aware video encoding** — automatically selects the best HW encoder per platform:
+  - macOS: `hevc_videotoolbox` with `-q:v 50`
+  - NVIDIA: `hevc_nvenc` with `-cq:v 28 -preset p5`
+  - Intel: `hevc_qsv` with `-global_quality 28`
+  - AMD: `hevc_amf` with CQP mode
+  - Fallback: `libx265 -crf 28 -preset slow`
+- **HW encode runtime fallback** — if hardware encoder fails mid-encode, automatically retries with software `libx265`
+- **`GET /api/v1/system` endpoint** — exposes full hardware profile and recommendations as JSON
+- **`HW_ACCEL_MODE` config** — `auto` (default), `force`, or `off` to control HW acceleration behavior
+- **49 new unit tests** (`tests/test_hardware.py`) covering all detection paths, recommendations, edge cases, and encoder flag generation
+- HW codec support in settings validation — `hevc_videotoolbox`, `hevc_nvenc`, `hevc_qsv`, `hevc_amf` (and h264 variants) are now valid codec choices
+- NVENC-specific preset validation (`p1`–`p7`)
+
+### Changed
+- Worker manager reads `HardwareProfile` at startup for pool sizing when `AUTO_SCALE` is enabled
+- `_build_ffmpeg_cmd` in video worker now inserts `-hwaccel <method>` BEFORE `-i` (correct FFmpeg ordering) and uses codec-specific quality flags instead of generic `-crf`
+- `app/compression/settings.py` expanded `VIDEO_CODECS` to include all HW encoder variants with per-codec preset validation
+- Factory calls `hardware.initialize()` before creating worker pools to ensure profile is cached
+
+## [2.3.0] - 2026-07-23
+
+### Added
+- **Processing timeout watchdog** — enforces `PROCESSING_TIMEOUT_MINUTES` at runtime; stuck workers are automatically reaped, their ffmpeg processes terminated, and files retried or permanently failed
+- **Disk space pre-check** — workers verify sufficient free disk space (`MIN_FREE_DISK_MB`, default 100 MB) before starting compression; files fail early with a clear error instead of crashing mid-write
+- **Event-driven dispatcher wake** — new files trigger the dispatcher immediately via `notify_new_files()` instead of waiting for the 2-second poll interval
+- **Per-job fair scheduling** — `get_pending_files` uses `ROW_NUMBER()` round-robin across active jobs so a single large job cannot monopolize all worker slots
+- **Dead letter / poison file detection** — `is_poison_file()` helper identifies files that repeatedly fail with the same error, enabling faster skip of known-bad media
+- **`ProcessRegistry.terminate_by_id()`** — targeted subprocess termination for timeout recovery without killing all active processes
+- **`MIN_FREE_DISK_MB`** environment variable for configurable disk space threshold
+- **`db.get_timed_out_files()`** and **`db.mark_file_timed_out()`** for timeout-based crash recovery
+
+### Changed
+- **Image compression uses `ProcessPoolExecutor`** — Pillow work now runs in separate processes to bypass GIL contention, improving throughput on multi-core systems
+- **`get_queue_counts` optimized** — replaced 5 separate `COUNT(*)` queries with a single `GROUP BY status` query to reduce SQLite write-lock contention
+- **Hash computation uses 1 MB chunks** (up from 8 KB) for significantly better I/O throughput on large video files
+- **Hash computation supports cancellation** — `compute_file_hash()` accepts an optional `should_cancel` callback to abort mid-stream
+- **File scanning runs in background thread** — `os.walk` + `add_files_batch` no longer blocks the HTTP response; job creation returns immediately with `"status": "scanning"`
+- Worker manager logs now distinguish process pool (images) from thread pool (videos)
+
+### Fixed
+- `PROCESSING_TIMEOUT_MINUTES` is now enforced at runtime (was previously defined but never checked)
+- Dispatcher no longer uses `_shutdown_event.wait()` for its sleep — uses a dedicated `_wake_event` that can be signalled independently
 
 ## [2.2.0] - 2026-07-04
 
@@ -91,7 +136,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SQLite queue with real-time WebSocket progress updates
 - Basic web UI with folder input and queue statistics
 
-[Unreleased]: https://github.com/viruchith/MediaCompressorWebApp/compare/v2.2.0...HEAD
+[Unreleased]: https://github.com/viruchith/MediaCompressorWebApp/compare/v2.3.0...HEAD
+[2.3.0]: https://github.com/viruchith/MediaCompressorWebApp/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/viruchith/MediaCompressorWebApp/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/viruchith/MediaCompressorWebApp/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/viruchith/MediaCompressorWebApp/compare/v1.0.0...v2.0.0

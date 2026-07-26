@@ -3,7 +3,7 @@ import logging
 import os
 import sqlite3
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.config import config
@@ -327,32 +327,25 @@ def _row_to_file(row: sqlite3.Row) -> FileRecord:
 
 
 def get_queue_counts() -> Dict[str, int]:
+    """Return queue statistics using a single GROUP BY query for efficiency."""
     conn = get_db()
     try:
-        total = conn.execute("SELECT COUNT(*) FROM files").fetchone()[0]
-        pending = conn.execute(
-            "SELECT COUNT(*) FROM files WHERE status = ?", (config.STATUS_PENDING,)
-        ).fetchone()[0]
-        processing = conn.execute(
-            "SELECT COUNT(*) FROM files WHERE status = ?", (config.STATUS_PROCESSING,)
-        ).fetchone()[0]
-        completed = conn.execute(
-            "SELECT COUNT(*) FROM files WHERE status = ?", (config.STATUS_COMPLETED,)
-        ).fetchone()[0]
-        errors = conn.execute(
-            "SELECT COUNT(*) FROM files WHERE status IN (?, ?)",
-            (config.STATUS_ERROR, config.STATUS_PERMANENT_FAIL),
-        ).fetchone()[0]
-        cancelled = conn.execute(
-            "SELECT COUNT(*) FROM files WHERE status = ?", (config.STATUS_CANCELLED,)
-        ).fetchone()[0]
+        # Single query instead of 5 separate COUNT queries to reduce DB contention
+        rows = conn.execute(
+            "SELECT status, COUNT(*) AS cnt FROM files GROUP BY status"
+        ).fetchall()
+        counts = {row["status"]: row["cnt"] for row in rows}
+        total = sum(counts.values())
         return {
             "total": total,
-            "pending": pending,
-            "processing": processing,
-            "completed": completed,
-            "errors": errors,
-            "cancelled": cancelled,
+            "pending": counts.get(config.STATUS_PENDING, 0),
+            "processing": counts.get(config.STATUS_PROCESSING, 0),
+            "completed": counts.get(config.STATUS_COMPLETED, 0),
+            "errors": (
+                counts.get(config.STATUS_ERROR, 0)
+                + counts.get(config.STATUS_PERMANENT_FAIL, 0)
+            ),
+            "cancelled": counts.get(config.STATUS_CANCELLED, 0),
         }
     except Exception as e:
         logger.error("Error getting queue counts: %s", e)
@@ -542,11 +535,23 @@ def get_file(file_id: int) -> Optional[FileRecord]:
 
 
 def get_pending_files(limit: int = 50) -> List[FileRecord]:
+    """Fetch pending files with per-job fair scheduling.
+
+    Uses ROW_NUMBER() to round-robin across active jobs so a single
+    large job cannot monopolize all worker slots.
+    """
     rows = get_db().execute(
-        """SELECT f.* FROM files f
-           JOIN jobs j ON f.job_id = j.id
-           WHERE f.status = ? AND j.status = 'active'
-           ORDER BY f.priority DESC, f.created_at ASC
+        """SELECT f.* FROM (
+               SELECT f2.*,
+                      ROW_NUMBER() OVER (
+                          PARTITION BY f2.job_id
+                          ORDER BY f2.priority DESC, f2.created_at ASC
+                      ) AS rn
+               FROM files f2
+               JOIN jobs j ON f2.job_id = j.id
+               WHERE f2.status = ? AND j.status = 'active'
+           ) f
+           ORDER BY f.rn ASC, f.priority DESC, f.created_at ASC
            LIMIT ?""",
         (config.STATUS_PENDING, limit),
     ).fetchall()
@@ -556,7 +561,7 @@ def get_pending_files(limit: int = 50) -> List[FileRecord]:
 def claim_file(file_id: int) -> bool:
     """Atomically claim a file for processing."""
     conn = get_db()
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     cursor = conn.execute(
         """UPDATE files SET status = ?, started_at = ?
            WHERE id = ? AND status = ?""",
@@ -576,7 +581,7 @@ def mark_file_completed(
     compression_ratio: float,
 ):
     conn = get_db()
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     file_row = conn.execute(
         "SELECT job_id, status FROM files WHERE id = ?", (file_id,)
     ).fetchone()
@@ -681,7 +686,7 @@ def retry_failed_files(job_id: int) -> int:
 
 def update_job_status(job_id: int, status: str):
     conn = get_db()
-    now = datetime.utcnow().isoformat() if status == "completed" else None
+    now = datetime.now(timezone.utc).isoformat() if status == "completed" else None
     if now:
         conn.execute(
             "UPDATE jobs SET status = ?, completed_at = ? WHERE id = ?",
@@ -802,7 +807,7 @@ def _maybe_complete_job(conn: sqlite3.Connection, job_id: int):
     if done >= row["total_files"]:
         conn.execute(
             "UPDATE jobs SET status = 'completed', completed_at = ? WHERE id = ?",
-            (datetime.utcnow().isoformat(), job_id),
+            (datetime.now(timezone.utc).isoformat(), job_id),
         )
 
 
@@ -810,3 +815,72 @@ def get_all_files_legacy() -> List[tuple]:
     """Return files in legacy tuple format for backward compatibility."""
     rows = get_db().execute("SELECT * FROM files ORDER BY id").fetchall()
     return [_row_to_file(r).to_legacy_tuple() for r in rows]
+
+
+def get_timed_out_files(timeout_minutes: int) -> List[FileRecord]:
+    """Find files stuck in PROCESSING state beyond the timeout threshold.
+
+    These files likely belong to hung workers or crashed ffmpeg processes
+    and need to be recovered.
+    """
+    conn = get_db()
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=timeout_minutes)).isoformat()
+    rows = conn.execute(
+        """SELECT * FROM files
+           WHERE status = ? AND started_at IS NOT NULL AND started_at < ?""",
+        (config.STATUS_PROCESSING, cutoff),
+    ).fetchall()
+    return [_row_to_file(r) for r in rows]
+
+
+def mark_file_timed_out(file_id: int) -> Optional[int]:
+    """Mark a timed-out file as failed and return its job_id.
+
+    Increments retry_count. If max retries exceeded, marks as permanent fail.
+    Returns the job_id for process cleanup, or None if file not found.
+    """
+    conn = get_db()
+    row = conn.execute(
+        "SELECT job_id, retry_count, max_retries FROM files WHERE id = ?",
+        (file_id,),
+    ).fetchone()
+    if not row:
+        return None
+
+    new_retry = row["retry_count"] + 1
+    permanent = new_retry >= row["max_retries"]
+    status = config.STATUS_PERMANENT_FAIL if permanent else config.STATUS_PENDING
+
+    conn.execute(
+        """UPDATE files SET status = ?, started_at = NULL,
+           retry_count = ?, error_message = 'Processing timed out'
+           WHERE id = ?""",
+        (status, new_retry, file_id),
+    )
+    conn.execute(
+        "UPDATE jobs SET failed_files = failed_files + 1 WHERE id = ?",
+        (row["job_id"],),
+    )
+    _maybe_complete_job(conn, row["job_id"])
+    conn.commit()
+    return row["job_id"]
+
+
+def is_poison_file(file_id: int, threshold: int = 2) -> bool:
+    """Check if a file has failed repeatedly with the same error (poison file).
+
+    A poison file is one that has hit max retries AND its retry count
+    meets or exceeds the threshold. These files consistently crash workers
+    and should be skipped faster.
+    """
+    conn = get_db()
+    row = conn.execute(
+        "SELECT retry_count, max_retries, status FROM files WHERE id = ?",
+        (file_id,),
+    ).fetchone()
+    if not row:
+        return False
+    return (
+        row["retry_count"] >= threshold
+        and row["status"] in (config.STATUS_ERROR, config.STATUS_PERMANENT_FAIL)
+    )

@@ -1,10 +1,23 @@
 # MediaCompressorWebApp — Current State
 
 ## Last Updated
-2026-07-04T13:15:00+05:30
+2026-07-26T17:00:00+05:30
 
 ## Version
-**2.2.0** (see [`VERSION`](VERSION) and [`CHANGELOG.md`](CHANGELOG.md))
+**2.4.0** (see [`VERSION`](VERSION) and [`CHANGELOG.md`](CHANGELOG.md))
+
+## Completed Changes (v2.4.0)
+- [x] Universal hardware auto-detection module (`app/hardware.py`)
+- [x] Cross-platform CPU detection (macOS sysctl / Linux /proc/cpuinfo / Windows wmic)
+- [x] RAM detection with fallback (macOS vm_stat / Linux /proc/meminfo / Windows wmic)
+- [x] GPU detection with vendor identification (Apple/NVIDIA/Intel/AMD)
+- [x] FFmpeg HW encoder/decoder probing at startup
+- [x] Adaptive worker scaling based on hardware profile (`AUTO_SCALE=true`)
+- [x] Platform-aware video encoding (VideoToolbox/NVENC/QSV/AMF with correct quality flags)
+- [x] HW-to-SW runtime fallback (automatic retry with libx265 if HW encoder fails)
+- [x] `/api/v1/system` endpoint exposing hardware profile
+- [x] HW codec validation in compression settings
+- [x] 49 unit tests for hardware module (79 total tests pass)
 
 ## Completed Changes (v2.2.0)
 - [x] SVG icons on buttons, labels, headings, stats, and dynamic job actions
@@ -23,19 +36,16 @@
 
 | File | Change |
 |------|--------|
-| `VERSION` | Bumped to 2.2.0 |
-| `app/config.py` | `LOG_FILE`, `LOG_MAX_BYTES`, `LOG_BACKUP_COUNT` |
-| `app/factory.py` | `RotatingFileHandler`, themed error pages |
-| `static/js/icons.js` | **New** — inline SVG icons + hydration |
-| `static/js/theme.js` | **New** — theme preference and toggle |
-| `static/css/style.css` | CSS variables, dark theme, icon/button styles |
-| `templates/_head_common.html` | **New** — shared CSS/JS includes |
-| `templates/_theme_init.html` | **New** — anti-FOUC theme script |
-| `templates/index.html` | Icons, theme toggle, header actions |
-| `templates/job_detail.html` | Icons, theme toggle |
-| `templates/settings.html` | Icons, theme toggle, log config docs |
-| `config.env.example` | Log file settings |
-| `.gitignore` | `logs/` directory |
+| `VERSION` | Bumped to 2.4.0 |
+| `app/hardware.py` | **New** — hardware detection + recommendation engine |
+| `app/config.py` | Added `AUTO_SCALE`, `HW_ACCEL_MODE` settings |
+| `app/compression/settings.py` | Added HW codecs, NVENC presets, per-codec validation |
+| `app/workers/video_worker.py` | Platform-aware `_build_ffmpeg_cmd`, HW fallback, `_run_ffmpeg` |
+| `app/workers/manager.py` | Auto-scaling pool sizes from HardwareProfile |
+| `app/factory.py` | Calls `hardware.initialize()` at startup |
+| `app/routes.py` | Added `/api/v1/system` endpoint |
+| `tests/test_hardware.py` | **New** — 49 unit tests |
+| `CHANGELOG.md` | v2.4.0 entry |
 
 ## API Endpoints (Current)
 
@@ -46,6 +56,8 @@
 | GET | `/jobs/<id>` | Job detail page |
 | GET | `/version` | Version info (legacy) |
 | GET | `/api/v1/version` | Version info |
+| GET | `/api/v1/health` | Health check |
+| GET | `/api/v1/system` | Hardware profile & recommendations |
 | GET | `/api/v1/jobs` | List jobs |
 | POST | `/api/v1/jobs` | Create job (`image_profile`, `video_profile`) |
 | GET | `/api/v1/jobs/<id>` | Job details |
@@ -81,6 +93,18 @@
 - **Cancel Queue** / **Clear All History** — queue management buttons
 - Job cards with stacked profiles and size-change summary
 
+## Configuration (worker/resiliency)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WORKER_COUNT_IMAGES` | `4` | Parallel image worker processes (ProcessPool) |
+| `WORKER_COUNT_VIDEOS` | `2` | Parallel video worker threads |
+| `AUTO_SCALE` | `true` | Override static worker counts with hardware-detected recommendations |
+| `HW_ACCEL_MODE` | `auto` | Hardware acceleration: `auto`, `force`, or `off` |
+| `MAX_RETRIES` | `3` | Per-file retry limit before permanent failure |
+| `PROCESSING_TIMEOUT_MINUTES` | `30` | Watchdog terminates stuck workers after N minutes |
+| `MIN_FREE_DISK_MB` | `100` | Minimum free disk space before starting compression |
+
 ## Configuration (logging)
 
 | Variable | Default | Description |
@@ -91,9 +115,9 @@
 
 ## Known Issues / TODOs
 
-- Image compression cannot be interrupted mid-PIL-save (short window)
+- Image compression in process pool lacks granular progress callbacks (shows 0% → 100%)
 - `clear_history` removed count includes both jobs and files
-- Hardware acceleration toggle not yet exposed in UI
+- Hardware acceleration settings UI page not yet implemented (profile visible via `/api/v1/system`)
 
 ## How to Test
 
@@ -105,4 +129,7 @@ python run.py
 2. **Icons** — confirm buttons and section headings show icons.
 3. **Logging** — check `logs/app.log` for startup and job messages.
 4. **Connection indicator** — Online when connected; Offline when server stopped.
-5. **Version** — `curl http://localhost:5000/api/v1/version` → `2.2.0`
+5. **Version** — `curl http://localhost:5000/api/v1/version` → `2.3.0`
+6. **Timeout watchdog** — set `PROCESSING_TIMEOUT_MINUTES=1`, submit a job, kill ffmpeg manually; verify file requeues.
+7. **Disk space** — set `MIN_FREE_DISK_MB=999999` and submit a job; verify instant "Insufficient disk space" error.
+8. **Fair scheduling** — create two jobs simultaneously; verify files interleave from both jobs.

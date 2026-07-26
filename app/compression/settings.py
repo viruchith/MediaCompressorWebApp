@@ -6,12 +6,30 @@ from typing import Any, Dict, Optional, Tuple
 from app.compression.profiles import PROFILES
 
 IMAGE_FORMATS = frozenset({"webp", "jpeg", "jpg", "png", "avif"})
-VIDEO_CODECS = frozenset({"libx265", "libx264", "libsvtav1", "libvpx-vp9"})
+# Software codecs
+VIDEO_CODECS_SW = frozenset({"libx265", "libx264", "libsvtav1", "libvpx-vp9"})
+# Hardware-accelerated codecs (platform-dependent availability)
+VIDEO_CODECS_HW = frozenset({
+    "hevc_videotoolbox", "h264_videotoolbox",   # macOS
+    "hevc_nvenc", "h264_nvenc",                  # NVIDIA
+    "hevc_qsv", "h264_qsv",                     # Intel QSV
+    "hevc_amf", "h264_amf",                      # AMD AMF
+})
+# Combined set for validation
+VIDEO_CODECS = VIDEO_CODECS_SW | VIDEO_CODECS_HW
 VIDEO_CONTAINERS = frozenset({"mkv", "mp4", "webm"})
 VIDEO_PRESETS = frozenset({
     "ultrafast", "superfast", "veryfast", "faster", "fast",
     "medium", "slow", "slower", "veryslow",
 })
+# HW encoders that ignore standard x264/x265 presets
+HW_CODEC_NO_PRESET = frozenset({
+    "hevc_videotoolbox", "h264_videotoolbox",
+    "hevc_qsv", "h264_qsv",
+    "hevc_amf", "h264_amf",
+})
+# NVENC uses its own preset scheme (p1-p7)
+NVENC_PRESETS = frozenset({"p1", "p2", "p3", "p4", "p5", "p6", "p7"})
 AUDIO_CODECS = frozenset({"aac", "opus", "copy"})
 VIDEO_RESOLUTIONS = frozenset({"original", "1080p", "720p", "480p", "360p"})
 
@@ -104,7 +122,17 @@ def validate_video_settings(settings: Dict[str, Any]) -> Tuple[Dict[str, Any], l
 
     if "preset" in settings:
         preset = str(settings["preset"])
-        if preset not in VIDEO_PRESETS:
+        codec = result.get("codec", "libx265")
+        # HW codecs that don't use standard presets — skip preset validation
+        if codec in HW_CODEC_NO_PRESET:
+            result["preset"] = preset  # Accept any; will be ignored by encoder
+        elif "nvenc" in codec:
+            # NVENC uses p1-p7 presets
+            if preset not in NVENC_PRESETS and preset not in VIDEO_PRESETS:
+                errors.append(f"video.preset for NVENC must be one of {sorted(NVENC_PRESETS)}")
+            else:
+                result["preset"] = preset
+        elif preset not in VIDEO_PRESETS:
             errors.append(f"video.preset must be one of {sorted(VIDEO_PRESETS)}")
         else:
             result["preset"] = preset

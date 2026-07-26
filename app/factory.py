@@ -66,6 +66,11 @@ def create_app() -> tuple:
     setup_logging()
     logger = logging.getLogger(__name__)
 
+    # Detect hardware capabilities before creating worker pools
+    from app.hardware import initialize as hw_initialize
+    hw_profile = hw_initialize()
+    logger.info("Hardware profile initialized: %s", hw_profile.recommended_video_codec)
+
     app = Flask(__name__, template_folder="../templates", static_folder="../static")
     app.config["SECRET_KEY"] = config.SECRET_KEY
 
@@ -125,7 +130,7 @@ def create_app() -> tuple:
         logger.info("Received signal %s, shutting down gracefully...", signum)
         db.reset_processing_on_shutdown()
         if _worker_manager:
-            _worker_manager.stop(wait=False)
+            _worker_manager.stop(wait=True)
         db.close_db()
         sys.exit(0)
 

@@ -14,6 +14,13 @@ class Config:
     WORKER_COUNT_VIDEOS: int = int(os.getenv("WORKER_COUNT_VIDEOS", "2"))
     MAX_RETRIES: int = int(os.getenv("MAX_RETRIES", "3"))
     PROCESSING_TIMEOUT_MINUTES: int = int(os.getenv("PROCESSING_TIMEOUT_MINUTES", "30"))
+    # Minimum free disk space (in MB) required before starting a compression task.
+    # Workers will fail files early if available space drops below this threshold.
+    MIN_FREE_DISK_MB: int = int(os.getenv("MIN_FREE_DISK_MB", "100"))
+    # When True, override static WORKER_COUNT_* with hardware-detected recommendations.
+    AUTO_SCALE: bool = os.getenv("AUTO_SCALE", "true").lower() in ("1", "true", "yes")
+    # Hardware acceleration mode: "auto" (detect), "force" (always use HW), "off" (SW only)
+    HW_ACCEL_MODE: str = os.getenv("HW_ACCEL_MODE", "auto")
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     LOG_JSON: bool = os.getenv("LOG_JSON", "false").lower() in ("1", "true", "yes")
     LOG_FILE: str = os.getenv("LOG_FILE", "logs/app.log")

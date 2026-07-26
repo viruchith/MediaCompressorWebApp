@@ -57,7 +57,8 @@ def compress_image(
     if should_cancel and should_cancel():
         raise InterruptedError("Image compression cancelled")
 
-    input_hash = compute_file_hash(input_path)
+    # Pass cancellation callback to hash computation for interruptibility
+    input_hash = compute_file_hash(input_path, should_cancel=should_cancel)
     input_size = os.path.getsize(input_path)
 
     quality = settings.get("quality", 75)
