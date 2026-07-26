@@ -17,6 +17,10 @@ class Config:
     # Minimum free disk space (in MB) required before starting a compression task.
     # Workers will fail files early if available space drops below this threshold.
     MIN_FREE_DISK_MB: int = int(os.getenv("MIN_FREE_DISK_MB", "100"))
+    # When True, override static WORKER_COUNT_* with hardware-detected recommendations.
+    AUTO_SCALE: bool = os.getenv("AUTO_SCALE", "true").lower() in ("1", "true", "yes")
+    # Hardware acceleration mode: "auto" (detect), "force" (always use HW), "off" (SW only)
+    HW_ACCEL_MODE: str = os.getenv("HW_ACCEL_MODE", "auto")
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     LOG_JSON: bool = os.getenv("LOG_JSON", "false").lower() in ("1", "true", "yes")
     LOG_FILE: str = os.getenv("LOG_FILE", "logs/app.log")

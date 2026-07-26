@@ -32,17 +32,35 @@ class WorkerManager:
         self.socketio = socketio
         self.app = app
         self._emit_queue: queue.SimpleQueue = queue.SimpleQueue()
+
+        # Determine worker counts: use hardware profile when AUTO_SCALE is enabled
+        image_workers = config.WORKER_COUNT_IMAGES
+        video_workers = config.WORKER_COUNT_VIDEOS
+        if config.AUTO_SCALE:
+            from app.hardware import get_hardware_profile
+            profile = get_hardware_profile()
+            if profile:
+                image_workers = profile.recommended_image_workers
+                video_workers = profile.recommended_video_workers
+                logger.info(
+                    "AUTO_SCALE: using hardware recommendations "
+                    "(images=%d, videos=%d, codec=%s)",
+                    image_workers, video_workers, profile.recommended_video_codec,
+                )
+
         # Use ProcessPoolExecutor for images to bypass the GIL during
         # CPU-bound Pillow operations (each image compresses in its own process).
         # Uses 'spawn' context to avoid inheriting parent's DB connections.
         self._image_pool = ProcessPoolExecutor(
-            max_workers=config.WORKER_COUNT_IMAGES,
+            max_workers=image_workers,
             mp_context=_MP_CONTEXT,
         )
         self._video_pool = ThreadPoolExecutor(
-            max_workers=config.WORKER_COUNT_VIDEOS,
+            max_workers=video_workers,
             thread_name_prefix="vid-worker",
         )
+        self._image_workers = image_workers
+        self._video_workers = video_workers
         self._active: Set[int] = set()
         self._lock = threading.Lock()
         self._running = False
@@ -76,8 +94,8 @@ class WorkerManager:
         self._dispatcher_thread.start()
         logger.info(
             "Worker manager started (images=%d [process pool], videos=%d [thread pool])",
-            config.WORKER_COUNT_IMAGES,
-            config.WORKER_COUNT_VIDEOS,
+            self._image_workers,
+            self._video_workers,
         )
 
     def stop(self, wait: bool = True):

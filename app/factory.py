@@ -66,6 +66,11 @@ def create_app() -> tuple:
     setup_logging()
     logger = logging.getLogger(__name__)
 
+    # Detect hardware capabilities before creating worker pools
+    from app.hardware import initialize as hw_initialize
+    hw_profile = hw_initialize()
+    logger.info("Hardware profile initialized: %s", hw_profile.recommended_video_codec)
+
     app = Flask(__name__, template_folder="../templates", static_folder="../static")
     app.config["SECRET_KEY"] = config.SECRET_KEY
 

@@ -86,6 +86,20 @@ def health_check():
         }), 503
 
 
+@api_bp.route("/system", methods=["GET"])
+def system_info():
+    """Expose detected hardware profile and scaling recommendations.
+
+    Returns CPU, RAM, GPU details and the auto-computed worker/codec settings.
+    Useful for the settings UI and for debugging performance tuning.
+    """
+    from app.hardware import get_hardware_profile
+    profile = get_hardware_profile()
+    if not profile:
+        return jsonify({"error": "Hardware profile not initialized"}), 503
+    return jsonify(profile.to_dict())
+
+
 def get_version_info():
     return {
         "version": VERSION,

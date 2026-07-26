@@ -7,28 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-07-26
+
 ### Added
-- **Health check endpoint** — `GET /healthz` and `GET /api/v1/health` for monitoring and load balancers
-- **Dockerfile** with multi-stage build, non-root user, and built-in health check
-- **`.dockerignore`** for lean container builds
-- **GitHub Actions CI** workflow — lint (flake8), test (pytest), and Docker build verification
-- **Test suite** — 30 unit/integration tests covering DB, API, utilities, and workers
-- **`requirements-dev.txt`** for development dependencies (pytest, flake8)
-- **WebSocket `job_updated` event** — pushes job state changes to clients in real time
-- **WebSocket `job_scan_complete` event** — notifies UI when background file scanning finishes
-- **XSS protection** — `safeBadgeClass()` whitelist prevents injection via job status badges
-- **Accessibility** — progress bars now include `role="progressbar"`, `aria-valuenow`, `aria-valuemin`, `aria-valuemax`
-- **Scanning status UI** — shows "scanning files in background…" message after job creation
+- **Hardware auto-detection module** (`app/hardware.py`) — universal cross-platform detection of CPU (physical/logical/P-E cores), RAM, GPU (vendor + VRAM), and FFmpeg HW encoders
+- **Adaptive worker scaling** (`AUTO_SCALE=true`) — dynamically sizes image/video worker pools based on detected hardware instead of static config
+- **Platform-aware video encoding** — automatically selects the best HW encoder per platform:
+  - macOS: `hevc_videotoolbox` with `-q:v 50`
+  - NVIDIA: `hevc_nvenc` with `-cq:v 28 -preset p5`
+  - Intel: `hevc_qsv` with `-global_quality 28`
+  - AMD: `hevc_amf` with CQP mode
+  - Fallback: `libx265 -crf 28 -preset slow`
+- **HW encode runtime fallback** — if hardware encoder fails mid-encode, automatically retries with software `libx265`
+- **`GET /api/v1/system` endpoint** — exposes full hardware profile and recommendations as JSON
+- **`HW_ACCEL_MODE` config** — `auto` (default), `force`, or `off` to control HW acceleration behavior
+- **49 new unit tests** (`tests/test_hardware.py`) covering all detection paths, recommendations, edge cases, and encoder flag generation
+- HW codec support in settings validation — `hevc_videotoolbox`, `hevc_nvenc`, `hevc_qsv`, `hevc_amf` (and h264 variants) are now valid codec choices
+- NVENC-specific preset validation (`p1`–`p7`)
 
 ### Changed
-- Replaced deprecated `datetime.utcnow()` with `datetime.now(timezone.utc)` (Python 3.12+ compatible)
-- `ProcessPoolExecutor` now uses `spawn` multiprocessing context to prevent inheriting parent DB connections
-- Background file scanner wrapped in `try/except` — errors are logged and job marked `scan_failed`
-- Graceful shutdown now waits for emit queue to drain (prevents lost progress events)
-- Frontend job polling reduced from 30s to 120s fallback (primary updates via WebSocket push)
-
-### Planned
-- Hardware acceleration toggle in the web UI
+- Worker manager reads `HardwareProfile` at startup for pool sizing when `AUTO_SCALE` is enabled
+- `_build_ffmpeg_cmd` in video worker now inserts `-hwaccel <method>` BEFORE `-i` (correct FFmpeg ordering) and uses codec-specific quality flags instead of generic `-crf`
+- `app/compression/settings.py` expanded `VIDEO_CODECS` to include all HW encoder variants with per-codec preset validation
+- Factory calls `hardware.initialize()` before creating worker pools to ensure profile is cached
 
 ## [2.3.0] - 2026-07-23
 

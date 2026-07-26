@@ -1,22 +1,23 @@
 # MediaCompressorWebApp — Current State
 
 ## Last Updated
-2026-07-23T17:30:00+05:30
+2026-07-26T17:00:00+05:30
 
 ## Version
-**2.3.0** (see [`VERSION`](VERSION) and [`CHANGELOG.md`](CHANGELOG.md))
+**2.4.0** (see [`VERSION`](VERSION) and [`CHANGELOG.md`](CHANGELOG.md))
 
-## Completed Changes (v2.3.0)
-- [x] Processing timeout watchdog — enforces `PROCESSING_TIMEOUT_MINUTES` at runtime
-- [x] Disk space pre-check (`MIN_FREE_DISK_MB`) before starting compression
-- [x] Event-driven dispatcher wake via `notify_new_files()`
-- [x] Per-job fair scheduling with ROW_NUMBER() round-robin
-- [x] Image compression moved to ProcessPoolExecutor (bypasses GIL)
-- [x] Background file scanning — job creation returns instantly
-- [x] Dead letter / poison file detection (`is_poison_file()`)
-- [x] Optimized `get_queue_counts` — single GROUP BY query
-- [x] Hash computation: 1 MB chunks with cancellation support
-- [x] `ProcessRegistry.terminate_by_id()` for targeted timeout recovery
+## Completed Changes (v2.4.0)
+- [x] Universal hardware auto-detection module (`app/hardware.py`)
+- [x] Cross-platform CPU detection (macOS sysctl / Linux /proc/cpuinfo / Windows wmic)
+- [x] RAM detection with fallback (macOS vm_stat / Linux /proc/meminfo / Windows wmic)
+- [x] GPU detection with vendor identification (Apple/NVIDIA/Intel/AMD)
+- [x] FFmpeg HW encoder/decoder probing at startup
+- [x] Adaptive worker scaling based on hardware profile (`AUTO_SCALE=true`)
+- [x] Platform-aware video encoding (VideoToolbox/NVENC/QSV/AMF with correct quality flags)
+- [x] HW-to-SW runtime fallback (automatic retry with libx265 if HW encoder fails)
+- [x] `/api/v1/system` endpoint exposing hardware profile
+- [x] HW codec validation in compression settings
+- [x] 49 unit tests for hardware module (79 total tests pass)
 
 ## Completed Changes (v2.2.0)
 - [x] SVG icons on buttons, labels, headings, stats, and dynamic job actions
@@ -35,18 +36,16 @@
 
 | File | Change |
 |------|--------|
-| `VERSION` | Bumped to 2.3.0 |
-| `app/config.py` | Added `MIN_FREE_DISK_MB` setting |
-| `app/db.py` | Optimized `get_queue_counts`, fair scheduling, timeout/poison helpers |
-| `app/routes.py` | Background file scanning thread |
-| `app/workers/manager.py` | ProcessPoolExecutor, watchdog, disk check, event-driven dispatch |
-| `app/workers/process_registry.py` | Added `terminate_by_id()` |
-| `app/utils/hashing.py` | 1 MB chunks, cancellation callback |
-| `app/workers/image_worker.py` | Cancellable hash |
-| `app/workers/video_worker.py` | Cancellable hash |
-| `config.env.example` | `MIN_FREE_DISK_MB` |
-| `CHANGELOG.md` | v2.3.0 entry |
-| `README.md` | Updated features, config, version |
+| `VERSION` | Bumped to 2.4.0 |
+| `app/hardware.py` | **New** — hardware detection + recommendation engine |
+| `app/config.py` | Added `AUTO_SCALE`, `HW_ACCEL_MODE` settings |
+| `app/compression/settings.py` | Added HW codecs, NVENC presets, per-codec validation |
+| `app/workers/video_worker.py` | Platform-aware `_build_ffmpeg_cmd`, HW fallback, `_run_ffmpeg` |
+| `app/workers/manager.py` | Auto-scaling pool sizes from HardwareProfile |
+| `app/factory.py` | Calls `hardware.initialize()` at startup |
+| `app/routes.py` | Added `/api/v1/system` endpoint |
+| `tests/test_hardware.py` | **New** — 49 unit tests |
+| `CHANGELOG.md` | v2.4.0 entry |
 
 ## API Endpoints (Current)
 
@@ -57,6 +56,8 @@
 | GET | `/jobs/<id>` | Job detail page |
 | GET | `/version` | Version info (legacy) |
 | GET | `/api/v1/version` | Version info |
+| GET | `/api/v1/health` | Health check |
+| GET | `/api/v1/system` | Hardware profile & recommendations |
 | GET | `/api/v1/jobs` | List jobs |
 | POST | `/api/v1/jobs` | Create job (`image_profile`, `video_profile`) |
 | GET | `/api/v1/jobs/<id>` | Job details |
@@ -98,6 +99,8 @@
 |----------|---------|-------------|
 | `WORKER_COUNT_IMAGES` | `4` | Parallel image worker processes (ProcessPool) |
 | `WORKER_COUNT_VIDEOS` | `2` | Parallel video worker threads |
+| `AUTO_SCALE` | `true` | Override static worker counts with hardware-detected recommendations |
+| `HW_ACCEL_MODE` | `auto` | Hardware acceleration: `auto`, `force`, or `off` |
 | `MAX_RETRIES` | `3` | Per-file retry limit before permanent failure |
 | `PROCESSING_TIMEOUT_MINUTES` | `30` | Watchdog terminates stuck workers after N minutes |
 | `MIN_FREE_DISK_MB` | `100` | Minimum free disk space before starting compression |
@@ -114,7 +117,7 @@
 
 - Image compression in process pool lacks granular progress callbacks (shows 0% → 100%)
 - `clear_history` removed count includes both jobs and files
-- Hardware acceleration toggle not yet exposed in UI
+- Hardware acceleration settings UI page not yet implemented (profile visible via `/api/v1/system`)
 
 ## How to Test
 
