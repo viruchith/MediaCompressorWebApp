@@ -11,6 +11,7 @@ from typing import Optional, Set
 from app import db
 from app.config import config
 from app.utils.manifest import save_manifest_to_output_folder
+from app.workers.copy_worker import copy_media_as_is
 from app.workers.image_worker import compress_image
 from app.workers.process_registry import ProcessRegistry
 from app.workers.video_worker import compress_video
@@ -195,7 +196,9 @@ class WorkerManager:
                     continue
                 self._active.add(file_rec.id)
 
-            if file_rec.file_type == "image":
+            if file_rec.file_type == "copy":
+                self._video_pool.submit(self._process_copy_file, file_rec.id)
+            elif file_rec.file_type == "image":
                 # Images run in a ProcessPoolExecutor (separate processes)
                 # to avoid GIL contention from CPU-bound Pillow work.
                 # We wrap the call in a thread that submits to the process
@@ -538,6 +541,107 @@ class WorkerManager:
     def _emit_queue_counts(self):
         counts = db.get_queue_counts()
         self._emit("queue_counts", counts)
+
+    def _process_copy_file(self, file_id: int):
+        """Fast-path for media archived as-is (e.g. pre-compressed WhatsApp/Snapchat)."""
+        start_time = time.monotonic()
+        try:
+            if self._cancel_event.is_set():
+                self._ensure_terminal_on_cancel(file_id)
+                return
+
+            file_rec = db.get_file(file_id)
+            if not file_rec or file_rec.status == config.STATUS_CANCELLED:
+                return
+
+            job_id = file_rec.job_id
+            output_path = file_rec.output_file_path or file_rec.input_file_path
+
+            if not self._check_disk_space(output_path):
+                db.mark_file_failed(file_id, "Insufficient disk space")
+                self._emit_progress(file_id, "error", "Insufficient disk space", 100, job_id=job_id)
+                return
+
+            self._emit_progress(
+                file_id, "processing",
+                f"Archiving {os.path.basename(file_rec.input_file_path)} (direct copy)",
+                0, job_id=job_id,
+            )
+
+            if not os.path.exists(file_rec.input_file_path):
+                db.mark_file_failed(file_id, "Input file not found")
+                self._emit_progress(file_id, "error", "File not found", 100, job_id=job_id)
+                return
+
+            def progress_cb(pct: int, msg: str):
+                if not self._cancel_event.is_set():
+                    self._emit_progress(file_id, "processing", msg, pct, job_id=job_id)
+
+            def should_cancel() -> bool:
+                return self._cancel_event.is_set()
+
+            out_path, inp_hash, out_hash, inp_size, out_size, ratio = copy_media_as_is(
+                file_rec.input_file_path,
+                output_path,
+                progress_callback=progress_cb,
+                should_cancel=should_cancel,
+            )
+
+            db.mark_file_completed(
+                file_id, out_path, out_size, out_hash, inp_size, inp_hash, ratio,
+            )
+
+            elapsed = time.monotonic() - start_time
+            logger.info("File %d archived as-is in %.1fs", file_id, elapsed)
+
+            self._emit_progress(
+                file_id, "completed",
+                f"Archived as-is: {os.path.basename(file_rec.input_file_path)}",
+                100,
+                extra={
+                    "input_size": inp_size,
+                    "output_size": out_size,
+                    "compression_ratio": ratio,
+                    "input_hash": inp_hash,
+                    "output_hash": out_hash,
+                },
+                job_id=job_id,
+            )
+
+            job = db.get_job(file_rec.job_id)
+            if job and job.status == "completed":
+                try:
+                    save_manifest_to_output_folder(file_rec.job_id)
+                except Exception as e:
+                    logger.error("Failed to save manifest for job %d: %s", file_rec.job_id, e)
+
+            self._emit_job_update(file_rec.job_id)
+
+        except InterruptedError:
+            logger.info("File %d copy interrupted (cancelled)", file_id)
+            file_rec = db.get_file(file_id)
+            if file_rec and file_rec.status != config.STATUS_CANCELLED:
+                db.mark_file_cancelled(file_id)
+            jid = file_rec.job_id if file_rec else None
+            self._emit_progress(file_id, "cancelled", "Cancelled", 100, job_id=jid)
+        except Exception as e:
+            if self._cancel_event.is_set():
+                self._ensure_terminal_on_cancel(file_id)
+                return
+            file_rec = db.get_file(file_id)
+            if file_rec and file_rec.status == config.STATUS_CANCELLED:
+                return
+            logger.error("Error copying file %d: %s", file_id, e)
+            permanent = False
+            if file_rec and file_rec.retry_count + 1 >= file_rec.max_retries:
+                permanent = True
+            db.mark_file_failed(file_id, str(e), permanent=permanent)
+            jid = file_rec.job_id if file_rec else None
+            self._emit_progress(file_id, "error", str(e), 100, job_id=jid)
+        finally:
+            with self._lock:
+                self._active.discard(file_id)
+            self._emit_queue_counts()
 
     def _emit_job_update(self, job_id: int):
         """Push job status change to connected clients via WebSocket.

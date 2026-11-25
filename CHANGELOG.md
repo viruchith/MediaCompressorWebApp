@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Incremental Destination Verification (Stateless Sync)**:
+  - Background scanner checks the actual output directory before enqueueing. If a compressed output exists, is intact, and has not been invalidated by newer source modification timestamps, the file is skipped automatically.
+  - Safe against database deletion or job clearing: subsequent runs on the same folders only process newly added or uncompressed media.
+  - Corrupted or partial outputs left behind by interrupted jobs are automatically detected via structural integrity verification (Pillow/ffprobe), removed, and cleanly re-compressed.
+- **Social Media Direct Archiving (`copy_as_is`)**:
+  - Automatically classifies pre-compressed media from WhatsApp and Snapchat (standard lossy streams) and copies them directly (`shutil.copy2`) without generational quality loss or CPU waste.
+  - Safeguard for WhatsApp Documents: media sent uncompressed as a Document (retaining full resolution and camera EXIF) is preserved for high-quality compression.
+  - Worker pipeline now supports fast-path direct copies with streaming SHA-256 calculation for complete JSON manifests.
 - **Android MediaStore & OS Junk Filtering**:
   - Implemented `app/utils/scanner.py` to automatically ignore Android trashed files (`.trashed-*`), AppleDouble files (`._*`), and OS metadata files (`.DS_Store`, `Thumbs.db`, `desktop.ini`, `.nomedia`).
   - Prunes junk directories (`.trashed`, `.Trash`, `.recycle`, `$RECYCLE.BIN`, `.thumbnails`, `.cache`) during background folder walk in `app/routes.py`.

@@ -10,7 +10,15 @@ from app import db
 from app.config import config
 from app.version import APP_AUTHOR, APP_COPYRIGHT_YEAR, APP_NAME, GITHUB_URL, VERSION
 from app.utils.manifest import build_job_manifest
-from app.utils.scanner import is_eligible_media_file, is_trashed_or_junk_file, should_ignore_dir
+from app.utils.scanner import (
+    is_destination_up_to_date,
+    is_eligible_media_file,
+    is_precompressed_social_media,
+    is_trashed_or_junk_file,
+    should_ignore_dir,
+)
+from app.workers.image_worker import get_output_path as get_image_output_path
+from app.workers.video_worker import get_output_path as get_video_output_path
 
 logger = logging.getLogger(__name__)
 
@@ -206,6 +214,8 @@ def _create_job_from_data(data: dict):
     def _scan_and_enqueue():
         try:
             file_batch = []
+            skipped_existing = 0
+
             for root, dirs, files in os.walk(input_folder):
                 # Prune ignored/junk directories in-place (e.g. .trashed, .Trash, .thumbnails)
                 dirs[:] = [d for d in dirs if not should_ignore_dir(d)]
@@ -232,13 +242,41 @@ def _create_job_from_data(data: dict):
                         continue
 
                     relative = os.path.relpath(input_path, input_folder)
-                    output_path = os.path.join(output_folder, relative)
-                    file_batch.append((input_path, output_path, ftype))
+                    base_output_path = os.path.join(output_folder, relative)
+
+                    # Check if media has already been compressed by social media (WhatsApp, Snapchat)
+                    # Unless it was sent as an uncompressed WhatsApp Document
+                    is_social = is_precompressed_social_media(input_path, ftype)
+
+                    if is_social:
+                        # Copy directly as-is (retaining original extension)
+                        expected_out = os.path.splitext(base_output_path)[0] + os.path.splitext(input_path)[1]
+                        check_ftype = ftype
+                        target_ftype = "copy"
+                    else:
+                        # Compute expected transcode path based on profile/settings
+                        if ftype == "image":
+                            expected_out = get_image_output_path(base_output_path, image_settings)
+                        else:
+                            expected_out = get_video_output_path(base_output_path, video_settings)
+                        check_ftype = ftype
+                        target_ftype = ftype
+
+                    # Incremental check: if output exists, is intact, and up to date, skip!
+                    # If corrupted or 0-byte from an interrupted job, it cleans up and re-processes.
+                    if is_destination_up_to_date(input_path, expected_out, check_ftype):
+                        skipped_existing += 1
+                        continue
+
+                    file_batch.append((input_path, base_output_path, target_ftype))
 
             added = db.add_files_batch(
                 job_id, file_batch, priority=priority, max_retries=config.MAX_RETRIES,
             )
-            logger.info("Job %d: background scan complete, %d files enqueued", job_id, added)
+            logger.info(
+                "Job %d: scan complete. Enqueued %d new files (skipped %d already up-to-date in destination)",
+                job_id, added, skipped_existing,
+            )
 
             # Wake the dispatcher immediately so it picks up new files
             from app.factory import get_worker_manager

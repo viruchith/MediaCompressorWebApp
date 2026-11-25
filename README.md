@@ -163,14 +163,17 @@ Observed on synthetic fixtures (2000×1500 PNG test pattern, 1920×1080 30fps 2s
 
 ## Behavior on Re-runs, Deletions, and Re-compression
 
-1. **Re-running a job on the same input folder**:
-   - The database enforces `UNIQUE(input_file_path)`.
-   - When scanning files, existing file paths are ignored via `INSERT OR IGNORE`.
-   - A newly created job for an already-processed folder enqueues 0 files and immediately completes. To reprocess files, the database records must be removed via `clear_history` or database deletion.
-2. **Database deletion (`file_db.db`)**:
-   - If the database file is removed, it is automatically recreated with fresh schema on next startup.
-   - All previous job history, queue counts, and file tracking records are cleared. Existing output files on disk remain untouched.
-3. **Queue actions**:
+1. **Incremental Processing & Re-runs**:
+   - The application checks the destination output folder dynamically during file scanning.
+   - If an output file already exists, is non-empty, passes structural integrity tests (via Pillow or ffprobe), and matches source modification timestamps, it is **skipped automatically**.
+   - Subsequent runs on the same source and destination folders only process newly added files.
+   - Deleting the job or losing the SQLite database does **not** cause re-compression of already archived media, as the destination folder is the source of truth.
+2. **Interrupted Job Recovery**:
+   - If a previous compression job was terminated mid-transcode, leaving a partial or zero-byte output file, the scanner detects the invalid header/container, deletes the corrupted artifact, and schedules it for clean re-compression.
+3. **Social Media & WhatsApp Document Handling**:
+   - Pre-compressed media from WhatsApp (`IMG-*-WA*`, `VID-*-WA*`, `WhatsApp Images/Video`) and Snapchat is copied directly to the archive destination without re-encoding to prevent generational degradation.
+   - Media sent as an uncompressed WhatsApp Document (`WhatsApp Documents/` or media containing original camera EXIF and high bitrates) is recognized as camera original and compressed using the selected profile.
+4. **Queue actions**:
    - `POST /api/v1/clear_completed`: Deletes records with `status=1` (completed) from SQLite. Files on disk are retained.
    - `POST /api/v1/cancel_queue`: Cancels active/pending files in SQLite (`status=-3`) and terminates tracked running FFmpeg subprocesses. Output files currently being written to temporary files are discarded.
    - `POST /api/v1/clear_history`: Terminates active work, resets queue, and executes `DELETE FROM files` and `DELETE FROM jobs`. Disk files are never deleted.
