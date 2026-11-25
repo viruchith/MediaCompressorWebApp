@@ -4,7 +4,7 @@
 
 # MediaCompressorWebApp
 
-[![Version](https://img.shields.io/badge/version-2.5.0-blue.svg)](VERSION)
+[![Version](https://img.shields.io/badge/version-2.6.0-blue.svg)](VERSION)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Flask](https://img.shields.io/badge/Flask-3.1%2B-green.svg)](https://flask.palletsprojects.com/)

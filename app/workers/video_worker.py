@@ -112,6 +112,15 @@ def _build_ffmpeg_cmd(
         crf = str(settings.get("crf", 28))
         cmd.extend(["-preset", preset, "-crf", crf])
 
+        # Pixel format (10-bit for libx265 eliminates banding, yuv420p for standard 8-bit compatibility)
+        pix_fmt = settings.get("pix_fmt")
+        if not pix_fmt:
+            if codec == "libx265":
+                pix_fmt = "yuv420p10le"
+            else:
+                pix_fmt = "yuv420p"
+        cmd.extend(["-pix_fmt", pix_fmt])
+
     # Audio settings
     audio_codec = settings.get("audio_codec", "aac")
     if audio_codec == "copy":
@@ -121,6 +130,10 @@ def _build_ffmpeg_cmd(
 
     if settings.get("preserve_metadata", True):
         cmd.extend(["-map_metadata", "0"])
+
+    container = settings.get("container", "mkv")
+    if container == "mp4":
+        cmd.extend(["-movflags", "+faststart"])
 
     cmd.append(output_path)
     return cmd

@@ -32,9 +32,10 @@ HW_CODEC_NO_PRESET = frozenset({
 NVENC_PRESETS = frozenset({"p1", "p2", "p3", "p4", "p5", "p6", "p7"})
 AUDIO_CODECS = frozenset({"aac", "opus", "copy"})
 VIDEO_RESOLUTIONS = frozenset({"original", "1080p", "720p", "480p", "360p"})
+VALID_PIX_FMTS = frozenset({"yuv420p", "yuv420p10le", "yuv422p", "yuv422p10le", "yuv444p", "yuv444p10le"})
 
 DEFAULT_IMAGE_SETTINGS: Dict[str, Any] = {
-    "quality": 75,
+    "quality": 80,
     "output_format": "webp",
     "max_dimension": None,
     "strip_metadata": False,
@@ -44,8 +45,9 @@ DEFAULT_IMAGE_SETTINGS: Dict[str, Any] = {
 DEFAULT_VIDEO_SETTINGS: Dict[str, Any] = {
     "codec": "libx265",
     "container": "mkv",
-    "crf": 28,
+    "crf": 22,
     "preset": "slow",
+    "pix_fmt": None,
     "audio_codec": "aac",
     "audio_bitrate": "128k",
     "resolution": "original",
@@ -146,6 +148,13 @@ def validate_video_settings(settings: Dict[str, Any]) -> Tuple[Dict[str, Any], l
 
     if "audio_bitrate" in settings:
         result["audio_bitrate"] = str(settings["audio_bitrate"])
+
+    if "pix_fmt" in settings and settings["pix_fmt"] is not None:
+        pf = str(settings["pix_fmt"])
+        if pf not in VALID_PIX_FMTS:
+            errors.append(f"video.pix_fmt must be one of {sorted(VALID_PIX_FMTS)}")
+        else:
+            result["pix_fmt"] = pf
 
     if "resolution" in settings:
         res = str(settings["resolution"]).lower()

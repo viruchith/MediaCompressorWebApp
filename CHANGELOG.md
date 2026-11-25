@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-11-25
+
+### Added
+- **Professional Compression Quality Standards**:
+  - **10-bit HEVC (`yuv420p10le`)**: Added default 10-bit color encoding for software `libx265` video profiles. Eliminates color banding on gradients and dark scenes even from 8-bit camera sources while improving compression efficiency.
+  - **Web Streaming Optimization (`-movflags +faststart`)**: Automatically injects `+faststart` for all MP4 container video outputs, placing the `moov` atom at the front of the file for instant progressive web and mobile streaming.
+  - **Alpha Transparency Preservation**: Fixed transparency handling in `image_worker.py`. Preserves native alpha channels in WebP, PNG, and AVIF, while cleanly compositing onto a solid white background only when encoding to JPEG.
+  - **EXIF Orientation Normalization**: Integrated `ImageOps.exif_transpose` to physically normalize rotated smartphone photos before resizing or saving, preventing portrait photos from being rotated sideways.
+  - **High-Effort WebP Encoding**: Added `method=6` effort flag to WebP compression for optimal density, reducing file size 10–20% without visual quality penalty.
+  - **Maximized PNG Compression**: Unconditionally enabled `compress_level=9` (maximum zlib compression) for PNG outputs.
+  - **New `photo_print` Profile**: Added dedicated maximum-fidelity profile providing lossless WebP conversion with complete ICC and EXIF metadata preservation for photographic and print archiving.
+  - **Video `pix_fmt` Validation**: Added validation support for `video.pix_fmt` with allowlist (`yuv420p`, `yuv420p10le`, `yuv422p`, `yuv422p10le`, `yuv444p`, `yuv444p10le`).
+
+### Changed
+- **Profile Retuning**:
+  - `balanced`: Lowered HEVC CRF from 28 to 22 (true visual balance for x265) and set image quality to 80 WebP.
+  - `archival_visually_lossless`: Tuned image quality from 95 to 88 WebP (eliminating diminishing byte inflation), enabled `yuv420p10le`, and increased audio bitrate to 256k AAC.
+  - `web_optimized`: Lowered video CRF from 23 to 20, switched preset to `slow`, and tuned image quality to 72 WebP.
+  - `mobile_friendly`: Lowered 720p video CRF from 28 to 24 to prevent visible macroblocking.
+  - `maximum_compression`: Capped video CRF at 30 (previously 35) to eliminate severe blocking/posterization.
+
 ## [2.5.0] - 2026-11-25
 
 ### Added

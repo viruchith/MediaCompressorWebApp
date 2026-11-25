@@ -1,6 +1,6 @@
 # Technical Documentation & System Architecture
 
-> In-depth architectural specification, data model, concurrency topology, and runtime behavior for **MediaCompressorWebApp** v2.5.0.
+> In-depth architectural specification, data model, concurrency topology, and runtime behavior for **MediaCompressorWebApp** v2.6.0.
 
 ---
 
@@ -9,7 +9,7 @@
 ```
 MediaCompressorWebApp/
 ├── run.py                          # Application entry point; initializes DB, app factory, and web server
-├── VERSION                         # Version string (2.5.0) loaded by app/version.py
+├── VERSION                         # Version string (2.6.0) loaded by app/version.py
 ├── app/
 │   ├── config.py                   # Dataclass loading environment variables with defaults
 │   ├── factory.py                  # Flask app factory, logging configuration, signal handlers

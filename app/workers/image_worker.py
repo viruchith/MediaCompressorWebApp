@@ -4,7 +4,7 @@ import os
 import tempfile
 from typing import Any, Callable, Dict, Optional
 
-from PIL import Image
+from PIL import Image, ImageOps
 from pillow_heif import register_heif_opener
 
 from app.config import config
@@ -88,7 +88,8 @@ def compress_image(
     if progress_callback:
         progress_callback(20, "Opening image")
 
-    with Image.open(input_path) as img:
+    with Image.open(input_path) as raw_img:
+        img = ImageOps.exif_transpose(raw_img)
         exif = img.info.get("exif")
         icc = img.info.get("icc_profile")
 
@@ -101,8 +102,19 @@ def compress_image(
                 if progress_callback:
                     progress_callback(40, f"Resized to {new_size[0]}x{new_size[1]}")
 
-        if pil_format in ("JPEG", "WEBP") and img.mode in ("RGBA", "LA", "P"):
-            img = img.convert("RGB")
+        # Color mode & alpha handling
+        if pil_format == "JPEG":
+            # JPEG cannot carry alpha; flatten transparency against white background
+            if img.mode in ("RGBA", "LA"):
+                background = Image.new("RGB", img.size, (255, 255, 255))
+                background.paste(img, mask=img.split()[-1])
+                img = background
+            elif img.mode != "RGB":
+                img = img.convert("RGB")
+        elif pil_format in ("WEBP", "PNG", "AVIF"):
+            # WebP, PNG, and AVIF support alpha natively; normalize palette mode
+            if img.mode == "P":
+                img = img.convert("RGBA" if "transparency" in img.info else "RGB")
 
         save_kwargs: Dict[str, Any] = {"optimize": True}
         if strip_metadata:
@@ -115,6 +127,7 @@ def compress_image(
                 save_kwargs["icc_profile"] = icc
 
         if pil_format == "WEBP":
+            save_kwargs["method"] = 6
             if lossless:
                 save_kwargs["lossless"] = True
             else:
@@ -122,8 +135,7 @@ def compress_image(
         elif pil_format == "JPEG":
             save_kwargs["quality"] = quality
         elif pil_format == "PNG":
-            if lossless:
-                save_kwargs["compress_level"] = 6
+            save_kwargs["compress_level"] = 9
         elif pil_format == "AVIF":
             save_kwargs["quality"] = quality
 
