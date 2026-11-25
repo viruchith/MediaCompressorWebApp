@@ -9,7 +9,7 @@
 <body>
     <header>
         <div class="header-top">
-            <h1>About <span class="app-version">v{{ app_version }}</span></h1>
+            <h1><img src="{{ url_for('static', filename='logo.svg') }}" alt="Media Compressor" class="header-logo"> About <span class="app-version">v{{ app_version }}</span></h1>
             <div class="header-actions">
                 <a href="{{ url_for('web.index') }}" class="button-link secondary" aria-label="Dashboard">🏠 Dashboard</a>
                 <a href="{{ url_for('web.help_page') }}" class="button-link secondary" aria-label="User Guide">📖 Help</a>
@@ -27,8 +27,13 @@
     </nav>
 
     <div class="card about-card">
-        <h2>{{ app_name }}</h2>
-        <p class="tagline">A self-hosted, offline media compression engine built for high-throughput batch archival processing.</p>
+        <div class="about-header-banner">
+            <img src="{{ url_for('static', filename='logo.svg') }}" alt="Media Compressor Logo" class="about-logo">
+            <div>
+                <h2>{{ app_name }}</h2>
+                <p class="tagline">A self-hosted, offline media compression engine built for high-throughput batch archival processing.</p>
+            </div>
+        </div>
         
         <table class="about-table">
             <tr>

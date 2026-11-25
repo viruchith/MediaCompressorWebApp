@@ -30,6 +30,7 @@ class TestHealthCheck:
         assert "breadcrumb-nav" in html
         assert "Dashboard" in html
         assert "favicon.ico" in html
+        assert "logo.svg" in html
 
     def test_about_page_returns_200(self, client):
         resp = client.get("/about")
@@ -41,6 +42,7 @@ class TestHealthCheck:
         assert "breadcrumb-nav" in html
         assert "Dashboard" in html
         assert "favicon.ico" in html
+        assert "logo.svg" in html
 
     def test_favicon_endpoint_returns_200(self, client):
         resp = client.get("/favicon.ico")

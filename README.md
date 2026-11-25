@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="static/logo.svg" alt="Media Compressor Logo" width="128" height="128">
+</p>
+
 # MediaCompressorWebApp
 
 [![Version](https://img.shields.io/badge/version-2.5.0-blue.svg)](VERSION)

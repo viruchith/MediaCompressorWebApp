@@ -9,7 +9,7 @@
 <body>
     <header>
         <div class="header-top">
-            <h1>User Guide & Help <span class="app-version">v{{ app_version }}</span></h1>
+            <h1><img src="{{ url_for('static', filename='logo.svg') }}" alt="Media Compressor" class="header-logo"> User Guide & Help <span class="app-version">v{{ app_version }}</span></h1>
             <div class="header-actions">
                 <a href="{{ url_for('web.index') }}" class="button-link secondary" aria-label="Dashboard">🏠 Dashboard</a>
                 <a href="{{ url_for('web.about_page') }}" class="button-link secondary" aria-label="About Application">ℹ️ About</a>
