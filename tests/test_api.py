@@ -47,13 +47,6 @@ class TestHealthCheck:
         assert resp.status_code == 200
         assert resp.mimetype == "image/vnd.microsoft.icon"
 
-    def test_manifest_endpoint_returns_200(self, client):
-        resp = client.get("/site.webmanifest")
-        assert resp.status_code == 200
-        assert resp.mimetype == "application/manifest+json"
-        data = resp.get_json()
-        assert data["name"] == "Media Compressor"
-
 
 class TestVersion:
     def test_version_endpoint(self, client):

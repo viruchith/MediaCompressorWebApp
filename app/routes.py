@@ -47,15 +47,6 @@ def favicon():
     )
 
 
-@web_bp.route("/site.webmanifest")
-def manifest():
-    return send_from_directory(
-        os.path.join(current_app.root_path, "..", "static"),
-        "site.webmanifest",
-        mimetype="application/manifest+json",
-    )
-
-
 @web_bp.route("/")
 def index():
     return render_template("index.html")
