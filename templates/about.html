@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About — Media Compressor</title>
+    {% include '_head_common.html' %}
+</head>
+<body>
+    <header>
+        <div class="header-top">
+            <h1><img src="{{ url_for('static', filename='logo.svg') }}" alt="Media Compressor" class="header-logo"> About <span class="app-version">v{{ app_version }}</span></h1>
+            <div class="header-actions">
+                <a href="{{ url_for('web.index') }}" class="button-link secondary" aria-label="Dashboard">🏠 Dashboard</a>
+                <a href="{{ url_for('web.help_page') }}" class="button-link secondary" aria-label="User Guide">📖 Help</a>
+                <button type="button" id="theme-toggle" class="theme-toggle secondary" aria-label="Theme"></button>
+            </div>
+        </div>
+        <p>Information about MediaCompressorWebApp, technology, and author</p>
+    </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol class="breadcrumbs">
+            <li><a href="{{ url_for('web.index') }}">🏠 Dashboard</a></li>
+            <li aria-current="page">About</li>
+        </ol>
+    </nav>
+
+    <div class="card about-card">
+        <div class="about-header-banner">
+            <img src="{{ url_for('static', filename='logo.svg') }}" alt="Media Compressor Logo" class="about-logo">
+            <div>
+                <h2>{{ app_name }}</h2>
+                <p class="tagline">A self-hosted, offline media compression engine built for high-throughput batch archival processing.</p>
+            </div>
+        </div>
+        
+        <table class="about-table">
+            <tr>
+                <th>Version</th>
+                <td><code>v{{ app_version }}</code></td>
+            </tr>
+            <tr>
+                <th>License</th>
+                <td>
+                    <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener">
+                        GNU General Public License v3.0 (GPL-3.0)
+                    </a>
+                </td>
+            </tr>
+            <tr>
+                <th>Source Code</th>
+                <td>
+                    <a href="{{ github_url }}" target="_blank" rel="noopener">{{ github_url }}</a>
+                </td>
+            </tr>
+            <tr>
+                <th>Architecture</th>
+                <td>Flask, Flask-SocketIO, SQLite WAL, Multiprocessing (Pillow), FFmpeg subprocesses</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="card about-card">
+        <h2>👤 Author & Creator</h2>
+        <div class="author-profile">
+            <h3>{{ author }}</h3>
+            <p>
+                Software engineer and creator of <strong>MediaCompressorWebApp</strong>, designed to give users complete control over their media privacy and archival footprint without cloud dependencies.
+            </p>
+            <div class="author-links">
+                <a href="{{ author_url }}" class="button-link primary" target="_blank" rel="noopener">
+                    🌐 Personal Website (viruchith.com)
+                </a>
+                <a href="{{ github_url }}" class="button-link secondary" target="_blank" rel="noopener">
+                    🐙 GitHub Repository
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="card about-card">
+        <h2>🛠️ Built With Open Source</h2>
+        <ul class="tech-stack-list">
+            <li><strong><a href="https://ffmpeg.org/" target="_blank" rel="noopener">FFmpeg</a></strong> — The universal multimedia transcoding framework.</li>
+            <li><strong><a href="https://python-pillow.org/" target="_blank" rel="noopener">Pillow</a> & <a href="https://github.com/bigcat88/pillow_heif" target="_blank" rel="noopener">pillow-heif</a></strong> — Fast Python imaging library for JPEG, WebP, PNG, and HEIC support.</li>
+            <li><strong><a href="https://flask.palletsprojects.com/" target="_blank" rel="noopener">Flask</a> & <a href="https://flask-socketio.readthedocs.io/" target="_blank" rel="noopener">Flask-SocketIO</a></strong> — Lightweight Python web framework with real-time WebSocket communication.</li>
+            <li><strong><a href="https://www.sqlite.org/" target="_blank" rel="noopener">SQLite</a></strong> — Embedded transactional relational database running in WAL mode with fair round-robin scheduling.</li>
+        </ul>
+    </div>
+
+    {% include '_footer.html' %}
+</body>
+</html>

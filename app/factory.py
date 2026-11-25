@@ -8,7 +8,14 @@ from pathlib import Path
 from flask import Flask, jsonify, render_template_string
 from flask_socketio import SocketIO
 
-from app.version import VERSION, APP_AUTHOR, APP_COPYRIGHT_YEAR, APP_NAME, GITHUB_URL
+from app.version import (
+    VERSION,
+    APP_AUTHOR,
+    APP_AUTHOR_URL,
+    APP_COPYRIGHT_YEAR,
+    APP_NAME,
+    GITHUB_URL,
+)
 from app.config import config
 from app import db
 from app.routes import api_bp, web_bp
@@ -87,6 +94,7 @@ def create_app() -> tuple:
             "app_version": VERSION,
             "version": VERSION,
             "author": APP_AUTHOR,
+            "author_url": APP_AUTHOR_URL,
             "copyright_year": APP_COPYRIGHT_YEAR,
             "app_name": APP_NAME,
             "github_url": GITHUB_URL,

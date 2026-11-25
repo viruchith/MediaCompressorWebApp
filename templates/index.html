@@ -10,8 +10,10 @@
 <body>
     <header>
         <div class="header-top">
-            <h1>Media Compressor <span class="app-version">v{{ app_version }}</span></h1>
+            <h1><img src="{{ url_for('static', filename='logo.svg') }}" alt="Media Compressor" class="header-logo"> Media Compressor <span class="app-version">v{{ app_version }}</span></h1>
             <div class="header-actions">
+                <a href="{{ url_for('web.help_page') }}" class="button-link secondary" aria-label="Help & Guide">📖 Help</a>
+                <a href="{{ url_for('web.about_page') }}" class="button-link secondary" aria-label="About Application">ℹ️ About</a>
                 <button type="button" id="theme-toggle" class="theme-toggle secondary" aria-label="Theme"></button>
                 <span id="connection-indicator" class="connection-indicator connecting" role="status" aria-live="polite">
                     <span class="connection-label">Connecting…</span>
@@ -26,13 +28,19 @@
         <form id="folder-form">
             <div class="form-group">
                 <label for="inputFolderPath" data-label-icon="folder-in" data-label-text="Input Folder Path"></label>
-                <input type="text" id="inputFolderPath" name="inputFolderPath" required
-                       placeholder="C:\Photos\input or /home/user/photos">
+                <div class="input-with-button">
+                    <input type="text" id="inputFolderPath" name="inputFolderPath" required
+                           placeholder="C:\Photos\input or /home/user/photos">
+                    <button type="button" class="secondary btn-browse" data-target="inputFolderPath">Browse…</button>
+                </div>
             </div>
             <div class="form-group">
                 <label for="outputFolderPath" data-label-icon="folder-out" data-label-text="Output Folder Path"></label>
-                <input type="text" id="outputFolderPath" name="outputFolderPath" required
-                       placeholder="C:\Photos\output or /home/user/photos-compressed">
+                <div class="input-with-button">
+                    <input type="text" id="outputFolderPath" name="outputFolderPath" required
+                           placeholder="C:\Photos\output or /home/user/photos-compressed">
+                    <button type="button" class="secondary btn-browse" data-target="outputFolderPath">Browse…</button>
+                </div>
             </div>
             <div class="form-group">
                 <label for="image-profile" data-label-icon="image" data-label-text="Image Profile"></label>
@@ -204,6 +212,27 @@
     </div>
 
     {% include '_footer.html' %}
+
+    <!-- Folder Browser Modal -->
+    <div id="folder-picker-modal" class="modal-backdrop" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="modal-picker-title">
+        <div class="modal-box card">
+            <div class="modal-header">
+                <h3 id="modal-picker-title" data-label-icon="folder-in" data-label-text="Select Directory"></h3>
+                <button type="button" class="modal-close" id="folder-picker-close" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-breadcrumbs">
+                <button type="button" id="folder-picker-up" class="secondary small-btn">▲ Up</button>
+                <span id="folder-picker-path" class="current-path-text">/</span>
+            </div>
+            <div class="modal-body">
+                <ul id="folder-picker-list" class="folder-list-view"></ul>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="folder-picker-cancel" class="secondary">Cancel</button>
+                <button type="button" id="folder-picker-select" class="primary">Select This Folder</button>
+            </div>
+        </div>
+    </div>
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>

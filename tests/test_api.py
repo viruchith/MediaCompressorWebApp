@@ -20,6 +20,35 @@ class TestHealthCheck:
         assert "workers" in data
         assert "queue" in data
 
+    def test_help_page_returns_200(self, client):
+        resp = client.get("/help")
+        assert resp.status_code == 200
+        html = resp.get_data(as_text=True)
+        assert "User Guide & Help" in html
+        assert "Quick 3-Step Guide" in html
+        assert "Smart Social Media Handling" in html
+        assert "breadcrumb-nav" in html
+        assert "Dashboard" in html
+        assert "favicon.ico" in html
+        assert "logo.svg" in html
+
+    def test_about_page_returns_200(self, client):
+        resp = client.get("/about")
+        assert resp.status_code == 200
+        html = resp.get_data(as_text=True)
+        assert "Viruchith Ganesan" in html
+        assert "https://viruchith.com/" in html
+        assert "GNU General Public License" in html
+        assert "breadcrumb-nav" in html
+        assert "Dashboard" in html
+        assert "favicon.ico" in html
+        assert "logo.svg" in html
+
+    def test_favicon_endpoint_returns_200(self, client):
+        resp = client.get("/favicon.ico")
+        assert resp.status_code == 200
+        assert resp.mimetype == "image/vnd.microsoft.icon"
+
 
 class TestVersion:
     def test_version_endpoint(self, client):
@@ -115,3 +144,35 @@ class TestQueueManagement:
         assert resp.status_code == 200
         data = resp.get_json()
         assert data["deleted"] == 0
+
+
+class TestDirectoryBrowser:
+    def test_browse_default(self, client):
+        resp = client.get("/api/v1/browse")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert "current" in data
+        assert "directories" in data
+        assert isinstance(data["directories"], list)
+
+    def test_browse_specific_path(self, client, tmp_path):
+        sub1 = tmp_path / "photos"
+        sub1.mkdir()
+        sub2 = tmp_path / "videos"
+        sub2.mkdir()
+        hidden = tmp_path / ".hidden"
+        hidden.mkdir()
+
+        resp = client.get(f"/api/v1/browse?path={tmp_path}")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["current"] == str(tmp_path)
+        assert "photos" in data["directories"]
+        assert "videos" in data["directories"]
+        assert ".hidden" not in data["directories"]
+
+    def test_browse_nonexistent_directory(self, client):
+        resp = client.get("/api/v1/browse?path=/path/that/does/not/exist_123456")
+        assert resp.status_code == 404
+        data = resp.get_json()
+        assert data["code"] == "DIRECTORY_NOT_FOUND"

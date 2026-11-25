@@ -2,7 +2,7 @@ import json
 import logging
 import os
 import threading
-from flask import Blueprint, jsonify, render_template, request
+from flask import Blueprint, current_app, jsonify, render_template, request, send_from_directory
 
 from app.compression.profiles import PROFILES
 from app.compression.settings import get_effective_settings
@@ -10,6 +10,15 @@ from app import db
 from app.config import config
 from app.version import APP_AUTHOR, APP_COPYRIGHT_YEAR, APP_NAME, GITHUB_URL, VERSION
 from app.utils.manifest import build_job_manifest
+from app.utils.scanner import (
+    is_destination_up_to_date,
+    is_eligible_media_file,
+    is_precompressed_social_media,
+    is_trashed_or_junk_file,
+    should_ignore_dir,
+)
+from app.workers.image_worker import get_output_path as get_image_output_path
+from app.workers.video_worker import get_output_path as get_video_output_path
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +38,28 @@ def get_json_or_form():
 
 # --- Web UI routes ---
 
+@web_bp.route("/favicon.ico")
+def favicon():
+    return send_from_directory(
+        os.path.join(current_app.root_path, "..", "static"),
+        "favicon.ico",
+        mimetype="image/vnd.microsoft.icon",
+    )
+
+
 @web_bp.route("/")
 def index():
     return render_template("index.html")
+
+
+@web_bp.route("/help")
+def help_page():
+    return render_template("help.html")
+
+
+@web_bp.route("/about")
+def about_page():
+    return render_template("about.html")
 
 
 @web_bp.route("/settings")
@@ -205,8 +233,16 @@ def _create_job_from_data(data: dict):
     def _scan_and_enqueue():
         try:
             file_batch = []
-            for root, _, files in os.walk(input_folder):
+            skipped_existing = 0
+
+            for root, dirs, files in os.walk(input_folder):
+                # Prune ignored/junk directories in-place (e.g. .trashed, .Trash, .thumbnails)
+                dirs[:] = [d for d in dirs if not should_ignore_dir(d)]
+
                 for filename in files:
+                    if is_trashed_or_junk_file(filename):
+                        continue
+
                     input_path = os.path.join(root, filename)
                     ext = os.path.splitext(filename)[1][1:].lower()
                     if ext in config.SUPPORTED_IMAGE_EXTENSIONS:
@@ -215,14 +251,51 @@ def _create_job_from_data(data: dict):
                         ftype = "video"
                     else:
                         continue
+
+                    # Skip empty files early
+                    try:
+                        if os.path.getsize(input_path) == 0:
+                            logger.info("Skipping empty file: %s", input_path)
+                            continue
+                    except OSError:
+                        continue
+
                     relative = os.path.relpath(input_path, input_folder)
-                    output_path = os.path.join(output_folder, relative)
-                    file_batch.append((input_path, output_path, ftype))
+                    base_output_path = os.path.join(output_folder, relative)
+
+                    # Check if media has already been compressed by social media (WhatsApp, Snapchat)
+                    # Unless it was sent as an uncompressed WhatsApp Document
+                    is_social = is_precompressed_social_media(input_path, ftype)
+
+                    if is_social:
+                        # Copy directly as-is (retaining original extension)
+                        expected_out = os.path.splitext(base_output_path)[0] + os.path.splitext(input_path)[1]
+                        check_ftype = ftype
+                        target_ftype = "copy"
+                    else:
+                        # Compute expected transcode path based on profile/settings
+                        if ftype == "image":
+                            expected_out = get_image_output_path(base_output_path, image_settings)
+                        else:
+                            expected_out = get_video_output_path(base_output_path, video_settings)
+                        check_ftype = ftype
+                        target_ftype = ftype
+
+                    # Incremental check: if output exists, is intact, and up to date, skip!
+                    # If corrupted or 0-byte from an interrupted job, it cleans up and re-processes.
+                    if is_destination_up_to_date(input_path, expected_out, check_ftype):
+                        skipped_existing += 1
+                        continue
+
+                    file_batch.append((input_path, base_output_path, target_ftype))
 
             added = db.add_files_batch(
                 job_id, file_batch, priority=priority, max_retries=config.MAX_RETRIES,
             )
-            logger.info("Job %d: background scan complete, %d files enqueued", job_id, added)
+            logger.info(
+                "Job %d: scan complete. Enqueued %d new files (skipped %d already up-to-date in destination)",
+                job_id, added, skipped_existing,
+            )
 
             # Wake the dispatcher immediately so it picks up new files
             from app.factory import get_worker_manager
@@ -355,6 +428,53 @@ def get_profile(name):
 @api_bp.route("/stats", methods=["GET"])
 def global_stats():
     return jsonify(db.get_global_stats())
+
+
+@api_bp.route("/browse", methods=["GET"])
+def browse_directories():
+    """Browse server-side directories for the folder picker.
+
+    Returns the current directory, parent path, and accessible subdirectories.
+    """
+    req_path = request.args.get("path")
+    if not req_path or not req_path.strip():
+        # Default to user home directory or current working directory
+        target = os.path.expanduser("~")
+    else:
+        target = os.path.abspath(os.path.expanduser(req_path.strip()))
+
+    if not os.path.exists(target):
+        return error_response(f"Directory not found: {target}", "DIRECTORY_NOT_FOUND", 404)
+    if not os.path.isdir(target):
+        return error_response(f"Path is not a directory: {target}", "NOT_A_DIRECTORY", 400)
+
+    try:
+        entries = []
+        with os.scandir(target) as it:
+            for entry in it:
+                try:
+                    if entry.is_dir(follow_symlinks=False):
+                        # Filter hidden/system directories
+                        if entry.name.startswith(".") or entry.name in ("$RECYCLE.BIN", "System Volume Information"):
+                            continue
+                        entries.append(entry.name)
+                except (PermissionError, OSError):
+                    continue
+
+        entries.sort(key=lambda s: s.lower())
+        parent = os.path.dirname(target)
+        if parent == target:
+            parent = None  # Reached root
+
+        return jsonify({
+            "current": target,
+            "parent": parent,
+            "directories": entries,
+        })
+    except PermissionError:
+        return error_response(f"Permission denied: {target}", "PERMISSION_DENIED", 403)
+    except Exception as e:
+        return error_response(str(e), "BROWSE_ERROR", 500)
 
 
 @api_bp.route("/clear_completed", methods=["POST"])

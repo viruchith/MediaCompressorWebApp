@@ -1,102 +1,58 @@
+<p align="center">
+  <img src="static/logo.svg" alt="Media Compressor Logo" width="128" height="128">
+</p>
+
 # MediaCompressorWebApp
 
-[![Version](https://img.shields.io/badge/version-2.4.0-blue.svg)](VERSION)
+[![Version](https://img.shields.io/badge/version-2.5.0-blue.svg)](VERSION)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
-[![Flask](https://img.shields.io/badge/Flask-3.0%2B-green.svg)](https://flask.palletsprojects.com/)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+[![Flask](https://img.shields.io/badge/Flask-3.1%2B-green.svg)](https://flask.palletsprojects.com/)
 
-> **Batch compress images and videos** with a production-grade Flask web app — parallel workers, hardware-accelerated encoding, crash recovery, encoding profiles, SHA-256 checksums, and real-time progress.
-
-**Author:** [Viruchith Ganesan](https://github.com/viruchith) · **Version:** 2.4.0 · **License:** [GPL-3.0](LICENSE)
+**MediaCompressorWebApp** is a self-hosted Flask web application and background worker queue for batch-compressing local image and video directories. It processes files concurrently using a multiprocessing worker pool for images (Pillow) and a multithreaded worker pool for videos (FFmpeg), tracking job progress, per-file metrics, and SHA-256 digests in an embedded SQLite database.
 
 ---
 
-## Table of Contents
+## Workflow & Incremental Sync Architecture
 
-- [Overview](#overview)
-- [Screenshots](#screenshots)
-- [Features](#features)
-- [Requirements](#requirements)
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-- [Configuration](#configuration)
-- [Compression Profiles](#compression-profiles)
-- [API Reference](#api-reference)
-- [Architecture](#architecture)
-- [Versioning](#versioning)
-- [Contributing](#contributing)
-- [License](#license)
-- [Acknowledgements](#acknowledgements)
-
----
-
-## Overview
-
-**MediaCompressorWebApp** is a self-hosted web application for batch-compressing image and video collections. Point it at an input folder, choose encoding profiles for images and videos independently, and monitor progress in real time while parallel workers process your files.
-
-Ideal for photographers, archivists, content creators, and anyone who needs repeatable, auditable media compression without cloud uploads.
-
-| | |
-|---|---|
-| **Repository** | https://github.com/viruchith/MediaCompressorWebApp |
-| **Language** | Python 3.9+ |
-| **Database** | SQLite (embedded, no external server) |
-| **Image engine** | Pillow (+ optional ImageMagick) |
-| **Video engine** | FFmpeg |
+```mermaid
+flowchart TD
+    A["Scan Input Directory (e.g. Syncthing Media)"] --> B{"Is junk or trashed file?<br>(.trashed*, ._, .DS_Store, 0-byte)"}
+    B -- Yes --> C["Ignore File (Do Not Enqueue)"]
+    B -- No --> D{"Does valid target exist in destination?<br>(Intact header & mtime check)"}
+    D -- Yes --> E["Skip File (Already Up-to-Date)"]
+    D -- Corrupt/Incomplete --> F["Clean up Broken File & Queue"]
+    D -- Missing (New File) --> G{"Is Pre-Compressed Social Media?<br>(Standard WhatsApp / Snapchat)"}
+    G -- "Yes (Lossy Stream)" --> H["Fast Copy As-Is (shutil.copy2)"]
+    G -- "No (Camera Raw / WA Document)" --> I["Enqueue for Near-Lossless Compression"]
+    H --> J["Compute SHA-256 & Complete File"]
+    I --> J
+```
 
 ---
 
-## Screenshots
+## Intended Use & Tradeoffs
 
-> Placeholder — add screenshots to `docs/images/` and update links below.
+### Who It Is For
+- Users who need a local, offline web interface or REST API to compress folders of media files without third-party cloud services.
+- Workflows syncing media from mobile devices (e.g. via Syncthing) into permanent archival storage where repeated runs only compress newly arrived files.
+- Workflows requiring structured JSON audit manifests containing file-level SHA-256 checksums and byte reductions.
+- Systems that benefit from automatic CPU/RAM resource scaling and hardware-accelerated video encoding where supported.
 
-| Main dashboard | Job detail |
-|:---:|:---:|
-| ![Main dashboard](docs/images/screenshot-dashboard.png) | ![Job detail](docs/images/screenshot-job-detail.png) |
-
-| Compression profiles | Real-time progress |
-|:---:|:---:|
-| ![Profiles](docs/images/screenshot-profiles.png) | ![Progress](docs/images/screenshot-progress.png) |
-
----
-
-## Features
-
-| Feature | Description |
-|---------|-------------|
-| **Hardware acceleration** | Auto-detects GPU and uses VideoToolbox / NVENC / QSV / AMF with SW fallback |
-| **Adaptive scaling** | Auto-tunes worker pool sizes based on CPU cores and available RAM |
-| **Parallel processing** | Process pool for images (bypasses GIL) + thread pool for videos |
-| **Resiliency** | Timeout watchdog, crash recovery, disk space pre-checks, poison file detection |
-| **Fair scheduling** | Round-robin across jobs — no single job monopolizes workers |
-| **Crash recovery** | Stale in-flight files resume on restart; graceful SIGTERM/SIGINT shutdown |
-| **Encoding profiles** | Archival, balanced, web-optimized, mobile-friendly, and more |
-| **Split profiles** | Independent image and video preset per job (`image_profile`, `video_profile`) |
-| **Advanced settings** | Per-job image/video overrides via UI or REST API |
-| **Queue control** | Cancel pending work, clear completed history, or flush entire database |
-| **Archival-grade** | SHA-256 checksums (1 MB streaming), JSON manifests, metadata preservation |
-| **Real-time progress** | WebSocket updates with FFmpeg encoding percentage and live file status |
-| **Connection status** | Online/offline indicator on the main dashboard |
-| **Dark theme** | Light, dark, or system-auto theme with header toggle |
-| **Icon UI** | Self-hosted SVG icons on buttons, labels, stats, and actions |
-| **File logging** | Rotating log file (`logs/app.log`) alongside console output |
-| **Job management** | Pause, resume, retry failed, download manifest, size-change summaries |
-| **Background scanning** | File discovery runs in a background thread — API responds instantly |
-| **Health checks** | `/healthz` and `/api/v1/health` endpoints for monitoring |
-| **Backward compatible** | Legacy routes and automatic DB migration from v1 schema |
+### Who It Is Not For
+- **Multi-user or untrusted network environments**: The application has no authentication, user authorization, or path sandboxing. Anyone with access to the web interface or API can initiate jobs reading or writing any filesystem location accessible to the server process, or clear database history.
 
 ---
 
-## Requirements
+## Verified System Requirements
 
-- **Python** 3.9 or newer
-- **FFmpeg** in `PATH` (required for video compression)
-- **Pillow** (installed via `requirements.txt`; handles images on all platforms)
-
-### Optional
-
-- **ImageMagick** (`magick`) — alternative image backend (not required)
-- **Copy `.env`** from `config.env.example` for custom configuration
+| Component | Minimum Version | Verified Version | Notes |
+|-----------|-----------------|------------------|-------|
+| **Python** | 3.10+ | 3.14.10 / 3.15 | Requires C-extension support for dependencies (Pillow, greenlet, eventlet). |
+| **FFmpeg** | 4.x+ | 7.x (with ffprobe) | Required for video compression. Must be available in system `PATH`. |
+| **Pillow** | 10.0+ | 12.3.0 | Installed via `requirements.txt`. Sole image backend. (ImageMagick is not used). |
+| **pillow-heif** | 0.16+ | 1.4.0 | Required for HEIC image decoding. |
+| **Database** | SQLite 3.25+ | 3.43+ | Bundled with Python standard library. Uses `WAL` mode and window functions. |
 
 ---
 
@@ -109,248 +65,216 @@ git clone https://github.com/viruchith/MediaCompressorWebApp.git
 cd MediaCompressorWebApp
 ```
 
-### 2. Install Python dependencies
+### 2. Create and activate a virtual environment
 
 ```bash
-pip install -r requirements.txt
+python3 -m venv .venv
+source .venv/bin/activate
 ```
 
-### 3. Install FFmpeg
+### 3. Install dependencies
 
-| Platform | Command |
-|----------|---------|
-| **Ubuntu / Debian** | `sudo apt install ffmpeg` |
-| **macOS** | `brew install ffmpeg` |
-| **Windows** | Download from [ffmpeg.org](https://ffmpeg.org/download.html) and add to `PATH` |
+```bash
+# Core runtime dependencies
+pip install -r requirements.txt
 
-Verify:
+# (Optional) Development and testing dependencies
+pip install -r requirements-dev.txt
+```
+
+### 4. Verify FFmpeg installation
 
 ```bash
 ffmpeg -version
 ```
 
-### 4. Configure (optional)
-
-```bash
-cp config.env.example .env
-# Edit .env — set SECRET_KEY, worker counts, etc.
-```
+If not installed:
+- **macOS**: `brew install ffmpeg`
+- **Ubuntu/Debian**: `sudo apt update && sudo apt install ffmpeg`
+- **Windows**: Download official binaries from [ffmpeg.org](https://ffmpeg.org/download.html) and add the directory containing `ffmpeg.exe` to system `PATH`.
 
 ---
 
 ## Quick Start
 
+### 1. Configure environment (recommended)
+
+Copy `config.env.example` to `.env`. For local security, keep `HOST=127.0.0.1`:
+
+```bash
+cp config.env.example .env
+```
+
+### 2. Run the application
+
 ```bash
 python run.py
 ```
 
-Open **http://localhost:5000** in your browser.
+Expected startup output:
+```
+[INFO] app.hardware: Hardware detected: darwin arm64 | CPU: Apple M4 (10/10 cores) | RAM: 24.0 GB | GPU: Apple M4 (apple)
+[INFO] app.hardware: Recommendations: image_workers=8, video_workers=3, codec=hevc_videotoolbox, hw_accel=True
+[INFO] app.factory: Hardware profile initialized: hevc_videotoolbox
+[INFO] app.workers.manager: Worker manager started (images=8 [process pool], videos=3 [thread pool])
+[INFO] __main__: Starting MediaCompressorWebApp on 127.0.0.1:5000
+```
 
-1. Enter **input** and **output** folder paths
-2. Select **Image Profile** and **Video Profile** (or expand Advanced Settings for fine-tuning)
-3. Click **Start Compression Job**
-4. Watch real-time progress (connection indicator shows **Online** when WebSocket is live)
-5. Use the header **theme toggle** (System / Light / Dark) as needed
-6. Download the manifest when the job completes
+Open **http://127.0.0.1:5000** in your browser.
 
-Server logs are written to **`logs/app.log`** by default (configurable via `LOG_FILE`).
+---
 
-Check the running version:
+## Configuration Reference
+
+The application reads configuration from environment variables (or `.env` file via `python-dotenv`).
+
+| Variable | Default | Type | Description | Source |
+|----------|---------|------|-------------|--------|
+| `HOST` | `0.0.0.0` | string | Network interface bind address. Change to `127.0.0.1` for local safety. | `app/config.py:29` |
+| `PORT` | `5000` | int | TCP port for web UI and REST API. | `app/config.py:30` |
+| `SECRET_KEY` | `dev-secret-key-change-in-production` | string | Flask session secret key. | `app/config.py:11` |
+| `DB_PATH` | `file_db.db` | string | SQLite database file location. | `app/config.py:12` |
+| `AUTO_SCALE` | `true` | bool | When true, overrides static worker counts using detected CPU and RAM. | `app/config.py:21` |
+| `WORKER_COUNT_IMAGES` | `4` | int | Parallel image worker processes (used if `AUTO_SCALE=false`). | `app/config.py:13` |
+| `WORKER_COUNT_VIDEOS` | `2` | int | Parallel video worker threads (used if `AUTO_SCALE=false`). | `app/config.py:14` |
+| `MIN_FREE_DISK_MB` | `100` | int | Minimum free MB on target disk required before dispatching a file. | `app/config.py:19` |
+| `PROCESSING_TIMEOUT_MINUTES` | `30` | int | Watchdog marks in-flight files timed out after N minutes without completion. | `app/config.py:16` |
+| `MAX_RETRIES` | `3` | int | Maximum retry attempts per file before permanent failure (`status=-2`). | `app/config.py:15` |
+| `LOG_LEVEL` | `INFO` | string | Logging verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`). | `app/config.py:24` |
+| `LOG_FILE` | `logs/app.log` | string | Rotating file log path (empty string disables file logging). | `app/config.py:26` |
+| `LOG_MAX_BYTES` | `10485760` | int | Max size per log file before rotation (default: 10 MB). | `app/config.py:27` |
+| `LOG_BACKUP_COUNT` | `5` | int | Number of rotated log archives to keep. | `app/config.py:28` |
+| `LOG_JSON` | `false` | bool | Output structured JSON log format to handlers. | `app/config.py:25` |
+| `HW_ACCEL_MODE` | `auto` | string | *Note*: Defined in `Config`, but not currently referenced in worker selection. | `app/config.py:23` |
+
+---
+
+## Compression Profiles & Measured Parameters
+
+The system defines 6 profiles in [`app/compression/profiles.py`](app/compression/profiles.py). Below are the exact codec arguments applied and measured results on test fixtures.
+
+### Profile Definitions
+
+| Profile | Image Settings | Video Settings |
+|---------|----------------|----------------|
+| `archival_lossless` | PNG, 100% quality, `lossless=True`, metadata kept | `libx265`, CRF 0, preset `veryslow`, container `mkv`, audio `copy` |
+| `archival_visually_lossless` | WebP, 95% quality, metadata kept | `libx265`, CRF 18, preset `slow`, container `mkv`, audio `aac` 192k |
+| `balanced` *(Default)* | WebP, 75% quality, metadata kept | `libx265`, CRF 28, preset `slow`, container `mkv`, audio `aac` 128k |
+| `web_optimized` | WebP, 60% quality, max 1920px, metadata stripped | `libx264`, CRF 23, preset `medium`, container `mp4`, audio `aac` 128k |
+| `mobile_friendly` | WebP, 70% quality, max 1080px, metadata stripped | `libx264`, CRF 28, preset `medium`, scale `720p` (`1280:-2`), container `mp4`, audio `aac` 96k |
+| `maximum_compression` | WebP, 40% quality, max 1920px, metadata stripped | `libx265`, CRF 35, preset `veryslow`, scale `720p` (`1280:-2`), container `mkv`, audio `opus` 64k *(Known issue: see below)* |
+
+### Measured Behavior on Test Media
+Observed on synthetic fixtures (2000×1500 PNG test pattern, 1920×1080 30fps 2s H.264 video):
+- **Images**:
+  - `archival_lossless`: 13.6 KB → 12.3 KB PNG (91% of original).
+  - `archival_visually_lossless`: 13.6 KB → 30.3 KB WebP (223% of original). High-quality lossy WebP (q=95) on structured graphics can exceed compressed source PNGs.
+  - `balanced`: 13.6 KB → 15.0 KB WebP.
+  - `web_optimized`: 13.6 KB → 10.5 KB WebP (scaled to 1920×1440).
+  - `mobile_friendly`: 13.6 KB → 1.8 KB WebP (scaled to 1080×810).
+  - `maximum_compression`: 13.6 KB → 8.2 KB WebP.
+- **Videos**:
+  - `archival_lossless`: 65.7 KB → 383.2 KB HEVC MKV (583% of original, CRF 0 creates uncompressed intra/predictive frames).
+  - `archival_visually_lossless`: 65.7 KB → 101.6 KB HEVC MKV.
+  - `balanced`: 65.7 KB → 66.8 KB HEVC MKV.
+  - `web_optimized`: 65.7 KB → 79.9 KB H.264 MP4.
+  - `mobile_friendly`: 65.7 KB → 47.1 KB H.264 MP4 (scaled to 1280×720).
+  - `maximum_compression`: Fails on standard FFmpeg due to native experimental Opus codec error (`FFmpeg failed with code 88`). See [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md).
+
+---
+
+## Behavior on Re-runs, Deletions, and Re-compression
+
+1. **Incremental Processing & Re-runs**:
+   - The application checks the destination output folder dynamically during file scanning.
+   - If an output file already exists, is non-empty, passes structural integrity tests (via Pillow or ffprobe), and matches source modification timestamps, it is **skipped automatically**.
+   - Subsequent runs on the same source and destination folders only process newly added files.
+   - Deleting the job or losing the SQLite database does **not** cause re-compression of already archived media, as the destination folder is the source of truth.
+2. **Interrupted Job Recovery**:
+   - If a previous compression job was terminated mid-transcode, leaving a partial or zero-byte output file, the scanner detects the invalid header/container, deletes the corrupted artifact, and schedules it for clean re-compression.
+3. **Social Media & WhatsApp Document Handling**:
+   - Pre-compressed media from WhatsApp (`IMG-*-WA*`, `VID-*-WA*`, `WhatsApp Images/Video`) and Snapchat is copied directly to the archive destination without re-encoding to prevent generational degradation.
+   - Media sent as an uncompressed WhatsApp Document (`WhatsApp Documents/` or media containing original camera EXIF and high bitrates) is recognized as camera original and compressed using the selected profile.
+4. **Queue actions**:
+   - `POST /api/v1/clear_completed`: Deletes records with `status=1` (completed) from SQLite. Files on disk are retained.
+   - `POST /api/v1/cancel_queue`: Cancels active/pending files in SQLite (`status=-3`) and terminates tracked running FFmpeg subprocesses.
+   - `POST /api/v1/clear_history`: Terminates active work, resets queue, and flushes database tables. Output files on disk are never deleted.
+
+---
+
+## Metadata and Checksum Verification
+
+- **EXIF & Color Profiles (Images)**:
+  - Preserved on WebP and JPEG when `strip_metadata=False` (default for `archival_*` and `balanced`).
+  - Stripped when `strip_metadata=True` (`web_optimized`, `mobile_friendly`, `maximum_compression`).
+  - XMP image metadata is not explicitly transferred by Pillow.
+- **Video Container Metadata**:
+  - `-map_metadata 0` is passed to FFmpeg, copying container-level tags (e.g. title, creation date, artist).
+- **Filesystem Modification Time (`mtime`)**:
+  - Preserved on direct copies (`copy_as_is`); transcoding creates new files with current timestamps.
+- **SHA-256 Checksums**:
+  - Streaming SHA-256 digests are computed in 1 MB chunks over source and target files and recorded in the JSON manifest.
+
+---
+
+## Security & Deployment Warnings
+
+> [!CAUTION]
+> **No Authentication**: MediaCompressorWebApp has NO authentication, password protection, or API tokens.
+
+- **Network Exposure**: By default, `Config.HOST` is set to `0.0.0.0`, allowing any device on your local network to access the web UI and REST API. If running on an untrusted or public network, configure `HOST=127.0.0.1` in `.env`.
+- **Arbitrary Path Access**: `POST /api/v1/jobs` accepts arbitrary paths for `input_folder` and `output_folder`.
+- **Recommended Production Topology**:
+  - Bind the application to `127.0.0.1:5000`.
+  - Put a reverse proxy (e.g., Nginx, Caddy, Cloudflare Tunnel) in front with HTTP Basic Authentication or OAuth2.
+
+---
+
+## Platform Support Matrix
+
+| Platform | Verification Status | Notes |
+|----------|---------------------|-------|
+| **macOS (Apple Silicon)** | **VERIFIED** | Tested on M4 macOS 15. Probes CPU topology, RAM, and `videotoolbox` hardware encoding (`hevc_videotoolbox`, `h264_videotoolbox`). |
+| **Linux (x86_64 / ARM)** | **PARTIAL** | Detection logic implemented for `/proc/cpuinfo`, `/proc/meminfo`, and NVIDIA/Intel/AMD devices. Unit tests pass (mocked). Physical hardware encoding on NVENC/QSV/AMF is unverified on this host. |
+| **Windows** | **PARTIAL** | Detection logic implemented using `wmic`. Unit tests pass (mocked). Physical Windows environment unverified. |
+
+---
+
+## Running Tests
+
+Unit tests are managed via `pytest` and defined under `tests/`:
 
 ```bash
-curl http://localhost:5000/api/v1/version
+# Ensure development dependencies are installed
+pip install -r requirements-dev.txt
+
+# Run full test suite
+pytest -v
+```
+
+Observed test run:
+```
+collected 86 items
+tests/test_api.py .............                                          [ 15%]
+tests/test_db.py ........                                                [ 24%]
+tests/test_hardware.py ................................................. [ 81%]
+tests/test_incremental_archive.py ....                                   [ 86%]
+tests/test_scanner.py ...                                                [ 89%]
+tests/test_utils.py .........                                            [100%]
+============================== 86 passed in 4.47s ==============================
 ```
 
 ---
 
-## Configuration
+## Known Limitations
 
-Environment variables (see [`config.env.example`](config.env.example)):
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SECRET_KEY` | *(dev default)* | Flask session secret — **change in production** |
-| `DB_PATH` | `file_db.db` | SQLite database file path |
-| `WORKER_COUNT_IMAGES` | `4` | Parallel image worker processes (ProcessPool) |
-| `WORKER_COUNT_VIDEOS` | `2` | Parallel video worker threads |
-| `AUTO_SCALE` | `true` | Override static worker counts with hardware-detected recommendations |
-| `HW_ACCEL_MODE` | `auto` | Hardware acceleration: `auto` (detect), `force`, or `off` |
-| `MAX_RETRIES` | `3` | Per-file retry limit before permanent failure |
-| `PROCESSING_TIMEOUT_MINUTES` | `30` | Watchdog terminates stuck workers after N minutes |
-| `MIN_FREE_DISK_MB` | `100` | Minimum free disk space (MB) before starting compression |
-| `LOG_LEVEL` | `INFO` | Logging verbosity (`DEBUG`, `INFO`, `WARNING`, …) |
-| `LOG_FILE` | `logs/app.log` | Rotating log file path (set empty to disable file logging) |
-| `LOG_MAX_BYTES` | `10485760` | Max log file size before rotation (10 MB) |
-| `LOG_BACKUP_COUNT` | `5` | Number of rotated log files to retain |
-| `LOG_JSON` | `false` | Emit structured JSON logs |
-| `HOST` | `0.0.0.0` | Server bind address |
-| `PORT` | `5000` | Server port |
-
----
-
-## Compression Profiles
-
-| Profile | Best for | Image | Video |
-|---------|----------|-------|-------|
-| `archival_lossless` | Long-term archival | PNG lossless | H.265 CRF 0 |
-| `archival_visually_lossless` | Near-lossless archive | WebP q95 | H.265 CRF 18 |
-| `balanced` | **Default** — quality/size balance | WebP q75 | H.265 CRF 28 |
-| `web_optimized` | Web delivery | WebP q60, max 1920px | H.264 MP4 |
-| `mobile_friendly` | Mobile devices | WebP q70, max 1080px | H.264 720p |
-| `maximum_compression` | Smallest files | WebP q40 | H.265 CRF 35 |
-
-List profiles via API:
-
-```bash
-curl http://localhost:5000/api/v1/profiles
-```
-
----
-
-## API Reference
-
-All v1 endpoints are prefixed with `/api/v1/`. Errors return:
-
-```json
-{"error": "Human-readable message", "code": "ERROR_CODE"}
-```
-
-### Version
-
-```bash
-GET /api/v1/version
-GET /version          # legacy alias
-```
-
-### Jobs
-
-```bash
-GET    /api/v1/jobs                         # List jobs (paginated)
-POST   /api/v1/jobs                         # Create job
-GET    /api/v1/jobs/<id>                    # Job details
-PUT    /api/v1/jobs/<id>/pause              # Pause job
-PUT    /api/v1/jobs/<id>/resume             # Resume job
-DELETE /api/v1/jobs/<id>                    # Delete job
-GET    /api/v1/jobs/<id>/files              # List files in job
-POST   /api/v1/jobs/<id>/retry_failed       # Retry failed files
-GET    /api/v1/jobs/<id>/manifest           # Download JSON manifest
-```
-
-### Create a job
-
-```bash
-curl -X POST http://localhost:5000/api/v1/jobs \
-  -H "Content-Type: application/json" \
-  -d '{
-    "input_folder": "/path/to/input",
-    "output_folder": "/path/to/output",
-    "image_profile": "balanced",
-    "video_profile": "web_optimized",
-    "priority": 5,
-    "preserve_metadata": true
-  }'
-```
-
-The legacy `profile` field still works and applies to both image and video when `image_profile` / `video_profile` are omitted.
-
-### Queue management
-
-```bash
-POST /api/v1/clear_completed    # Remove completed files from DB
-POST /api/v1/cancel_queue       # Cancel pending/processing files
-POST /api/v1/clear_history      # Flush all jobs and files
-```
-
-### WebSocket events
-
-| Event | Direction | Payload |
-|-------|-----------|---------|
-| `progress_update` | Server → Client | `file_id`, `job_id`, `status`, `message`, `percent` |
-| `queue_counts` | Server → Client | `total`, `pending`, `processing`, `completed`, `errors`, `cancelled` |
-| `queue_cancelled` | Server → Client | `message`, counts |
-| `history_cleared` | Server → Client | `message` |
-| `connection_status` | Server → Client | `status` (`connected`) |
-| `request_queue_counts` | Client → Server | — |
-
-The main UI shows an **Online** / **Offline** badge driven by Socket.IO `connect`, `disconnect`, and `connection_status` events.
-
-See [`CURRENT_STATE.md`](CURRENT_STATE.md) for the complete endpoint list and schema.
-
----
-
-## Architecture
-
-```
-MediaCompressorWebApp/
-├── run.py                  # Entry point
-├── VERSION                 # Canonical version string (read by app/version.py)
-├── app/
-│   ├── factory.py          # Flask app factory, logging, signals
-│   ├── version.py          # VERSION, author, copyright metadata
-│   ├── config.py           # Environment configuration
-│   ├── hardware.py         # Hardware auto-detection & adaptive scaling
-│   ├── db.py               # SQLite, migrations, crash recovery
-│   ├── routes.py           # HTTP routes (web + API v1)
-│   ├── sockets.py          # WebSocket handlers
-│   ├── workers/            # Parallel compression workers
-│   ├── compression/        # Profiles and settings validation
-│   └── utils/              # Hashing and manifests
-├── templates/              # Jinja2 HTML templates
-├── static/                 # CSS, JavaScript, vendor assets
-│   ├── js/icons.js         # SVG icon helpers
-│   ├── js/theme.js         # Dark/light/system theme
-│   └── vendor/             # Bundled Socket.IO client
-├── logs/                   # Rotating app log (gitignored, auto-created)
-├── CHANGELOG.md            # Release history
-└── LICENSE                 # GNU GPL v3.0
-```
-
----
-
-## Versioning
-
-This project follows [Semantic Versioning](https://semver.org/). The canonical version is stored in the [`VERSION`](VERSION) file and loaded by [`app/version.py`](app/version.py).
-
-| Release | Date | Highlights |
-|---------|------|------------|
-| **2.4.0** | 2026-07-26 | Hardware auto-detection, adaptive scaling, platform-aware HW encoding (VideoToolbox/NVENC/QSV/AMF) |
-| **2.3.0** | 2026-07-23 | Parallel processing resiliency — process pool, timeout watchdog, fair scheduling, disk checks |
-| **2.2.0** | 2026-07-04 | SVG icon UI, dark/system theme toggle, rotating file logging |
-| **2.1.0** | 2026-07-04 | Split image/video profiles, queue cancel/clear, live connection indicator, progress fixes |
-| **2.0.0** | 2026-07-04 | Major refactor — modular architecture, worker pools, API v1 |
-| **1.0.0** | 2025-01-01 | Initial monolithic Flask release |
-
-See [`CHANGELOG.md`](CHANGELOG.md) for full release notes.
-
----
-
-## Contributing
-
-Contributions are welcome! Please:
-
-1. Read [`TECHNICAL.md`](TECHNICAL.md) for architecture details and coding conventions
-2. Fork the repository
-3. Create a feature branch (`git checkout -b feature/my-feature`)
-4. Commit your changes with clear messages
-5. Open a Pull Request against `main`
-
-By contributing, you agree that your contributions will be licensed under the **GPL-3.0** license.
+For reproduction steps and severity rankings, see [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md):
+1. **Opus Audio Encoding**: The `maximum_compression` video profile defaults to native Opus audio, which fails with code 88 on standard FFmpeg builds without `-strict -2`.
+2. **Dead Configuration**: `HW_ACCEL_MODE` in `.env` is parsed but ignored by the worker selection engine.
+3. **Poison File Handling**: `is_poison_file()` helper is implemented in `app/db.py` but is not wired into the worker dispatch loop.
 
 ---
 
 ## License
 
-Copyright © 2025–2026 **Viruchith Ganesan**
-
-This program is free software: you can redistribute it and/or modify it under the terms of the **GNU General Public License v3.0** as published by the Free Software Foundation.
-
-See the [LICENSE](LICENSE) file for the full license text.
-
----
-
-## Acknowledgements
-
-- [FFmpeg](https://ffmpeg.org/) — video transcoding
-- [Pillow](https://python-pillow.org/) — image processing
-- [Flask](https://flask.palletsprojects.com/) — web framework
-- [Flask-SocketIO](https://flask-socketio.readthedocs.io/) — real-time updates
+This software is licensed under the **GNU General Public License v3.0**. See the [LICENSE](LICENSE) file for details.

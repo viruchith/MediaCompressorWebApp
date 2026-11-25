@@ -45,6 +45,16 @@ def compress_image(
     """Compress an image atomically. Returns (out_path, input_hash, output_hash, input_size, output_size, ratio)."""
     _ensure_heif()
 
+    if not os.path.exists(input_path):
+        raise FileNotFoundError(f"Source file does not exist: {input_path}")
+
+    if os.path.getsize(input_path) == 0:
+        raise ValueError(f"Cannot compress 0-byte file: {input_path}")
+
+    filename = os.path.basename(input_path)
+    if filename.lower().startswith(".trashed"):
+        raise ValueError(f"Skipping Android trashed file: {filename}")
+
     if not is_image_file(input_path):
         raise ValueError(f"Not a valid image file: {input_path}")
 

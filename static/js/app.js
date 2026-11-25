@@ -654,10 +654,117 @@ socket.on('disconnect', () => setConnectionStatus('offline'));
 socket.on('connect_error', () => setConnectionStatus('offline'));
 socket.on('connection_status', () => setConnectionStatus('online'));
 
+// --- Folder Picker Modal ---
+
+let activePickerTarget = null;
+let currentPickerPath = '';
+let currentPickerParent = null;
+
+function initFolderPicker() {
+    const modal = document.getElementById('folder-picker-modal');
+    if (!modal) return;
+
+    document.querySelectorAll('.btn-browse').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const targetId = e.currentTarget.getAttribute('data-target');
+            const inputEl = document.getElementById(targetId);
+            const initialPath = inputEl ? inputEl.value : '';
+            openFolderPicker(targetId, initialPath);
+        });
+    });
+
+    document.getElementById('folder-picker-close')?.addEventListener('click', closeFolderPicker);
+    document.getElementById('folder-picker-cancel')?.addEventListener('click', closeFolderPicker);
+
+    document.getElementById('folder-picker-up')?.addEventListener('click', () => {
+        if (currentPickerParent) {
+            navigateFolderPicker(currentPickerParent);
+        }
+    });
+
+    document.getElementById('folder-picker-select')?.addEventListener('click', () => {
+        if (activePickerTarget && currentPickerPath) {
+            const input = document.getElementById(activePickerTarget);
+            if (input) {
+                input.value = currentPickerPath;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        }
+        closeFolderPicker();
+    });
+
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeFolderPicker();
+    });
+}
+
+function openFolderPicker(targetInputId, startPath) {
+    activePickerTarget = targetInputId;
+    const modal = document.getElementById('folder-picker-modal');
+    if (modal) modal.style.display = 'flex';
+    navigateFolderPicker(startPath || '');
+}
+
+function closeFolderPicker() {
+    const modal = document.getElementById('folder-picker-modal');
+    if (modal) modal.style.display = 'none';
+    activePickerTarget = null;
+}
+
+async function navigateFolderPicker(path) {
+    const listEl = document.getElementById('folder-picker-list');
+    const pathEl = document.getElementById('folder-picker-path');
+    const upBtn = document.getElementById('folder-picker-up');
+    if (!listEl) return;
+
+    listEl.innerHTML = '<li class="loading-item">Loading directories…</li>';
+
+    try {
+        const url = `/api/v1/browse?path=${encodeURIComponent(path || '')}`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!res.ok) {
+            listEl.innerHTML = `<li class="error-item">${escapeHtml(data.error || 'Failed to load directory')}</li>`;
+            return;
+        }
+
+        currentPickerPath = data.current;
+        currentPickerParent = data.parent;
+
+        if (pathEl) pathEl.textContent = currentPickerPath;
+        if (upBtn) upBtn.disabled = !currentPickerParent;
+
+        if (!data.directories || data.directories.length === 0) {
+            listEl.innerHTML = '<li class="empty-item">No subdirectories</li>';
+            return;
+        }
+
+        listEl.innerHTML = data.directories.map(dir => {
+            return `<li class="folder-item" data-name="${escapeHtml(dir)}">
+                <span class="folder-icon">📁</span>
+                <span class="folder-name">${escapeHtml(dir)}</span>
+            </li>`;
+        }).join('');
+
+        listEl.querySelectorAll('.folder-item').forEach(li => {
+            li.addEventListener('click', () => {
+                const name = li.getAttribute('data-name');
+                const sep = currentPickerPath.endsWith('/') || currentPickerPath.endsWith('\\') ? '' : '/';
+                const nextPath = currentPickerPath + sep + name;
+                navigateFolderPicker(nextPath);
+            });
+        });
+    } catch (e) {
+        listEl.innerHTML = `<li class="error-item">Network error while browsing folders</li>`;
+    }
+}
+
 // --- Init ---
 
 document.addEventListener('DOMContentLoaded', () => {
     initForm();
+    initFolderPicker();
     loadProfiles();
     loadFiles();
     loadJobs();
