@@ -2,7 +2,7 @@ import json
 import logging
 import os
 import threading
-from flask import Blueprint, jsonify, render_template, request
+from flask import Blueprint, current_app, jsonify, render_template, request, send_from_directory
 
 from app.compression.profiles import PROFILES
 from app.compression.settings import get_effective_settings
@@ -37,6 +37,24 @@ def get_json_or_form():
 
 
 # --- Web UI routes ---
+
+@web_bp.route("/favicon.ico")
+def favicon():
+    return send_from_directory(
+        os.path.join(current_app.root_path, "..", "static"),
+        "favicon.ico",
+        mimetype="image/vnd.microsoft.icon",
+    )
+
+
+@web_bp.route("/site.webmanifest")
+def manifest():
+    return send_from_directory(
+        os.path.join(current_app.root_path, "..", "static"),
+        "site.webmanifest",
+        mimetype="application/manifest+json",
+    )
+
 
 @web_bp.route("/")
 def index():

@@ -29,6 +29,7 @@ class TestHealthCheck:
         assert "Smart Social Media Handling" in html
         assert "breadcrumb-nav" in html
         assert "Dashboard" in html
+        assert "favicon.ico" in html
 
     def test_about_page_returns_200(self, client):
         resp = client.get("/about")
@@ -39,6 +40,19 @@ class TestHealthCheck:
         assert "GNU General Public License" in html
         assert "breadcrumb-nav" in html
         assert "Dashboard" in html
+        assert "favicon.ico" in html
+
+    def test_favicon_endpoint_returns_200(self, client):
+        resp = client.get("/favicon.ico")
+        assert resp.status_code == 200
+        assert resp.mimetype == "image/vnd.microsoft.icon"
+
+    def test_manifest_endpoint_returns_200(self, client):
+        resp = client.get("/site.webmanifest")
+        assert resp.status_code == 200
+        assert resp.mimetype == "application/manifest+json"
+        data = resp.get_json()
+        assert data["name"] == "Media Compressor"
 
 
 class TestVersion:
