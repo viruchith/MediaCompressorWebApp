@@ -1,135 +1,50 @@
-# MediaCompressorWebApp — Current State
+# MediaCompressorWebApp — Current Verified State
 
-## Last Updated
-2026-07-26T17:00:00+05:30
+## Last Verified
+2026-11-25
 
 ## Version
 **2.4.0** (see [`VERSION`](VERSION) and [`CHANGELOG.md`](CHANGELOG.md))
 
-## Completed Changes (v2.4.0)
-- [x] Universal hardware auto-detection module (`app/hardware.py`)
-- [x] Cross-platform CPU detection (macOS sysctl / Linux /proc/cpuinfo / Windows wmic)
-- [x] RAM detection with fallback (macOS vm_stat / Linux /proc/meminfo / Windows wmic)
-- [x] GPU detection with vendor identification (Apple/NVIDIA/Intel/AMD)
-- [x] FFmpeg HW encoder/decoder probing at startup
-- [x] Adaptive worker scaling based on hardware profile (`AUTO_SCALE=true`)
-- [x] Platform-aware video encoding (VideoToolbox/NVENC/QSV/AMF with correct quality flags)
-- [x] HW-to-SW runtime fallback (automatic retry with libx265 if HW encoder fails)
-- [x] `/api/v1/system` endpoint exposing hardware profile
-- [x] HW codec validation in compression settings
-- [x] 49 unit tests for hardware module (79 total tests pass)
+## Verification Status Summary
+- **Test Suite**: 79/79 pytest unit tests passing (`tests/test_api.py`, `tests/test_db.py`, `tests/test_hardware.py`, `tests/test_utils.py`). Run with `.venv/bin/pytest -v`.
+- **Hardware Probing**: Tested and operational on macOS (Apple Silicon M4). Correctly identifies CPU topology, Unified Memory, and VideoToolbox encoders (`hevc_videotoolbox`, `h264_videotoolbox`). Linux and Windows detection paths are implemented with unit tests, but physical runtime execution on NVENC/QSV/AMF is unverified on this host.
+- **Worker Concurrency**: Process pool (using `spawn` context) for Pillow image processing, thread pool for FFmpeg subprocess execution. Auto-scaling actively calculates 8 image workers and 3 video workers on 10-core M4 with 24 GB RAM.
+- **Database & Queue**: SQLite in WAL mode with connection-per-thread (`threading.local`). Fair scheduling round-robin verified via SQLite window function `ROW_NUMBER()`. Crash recovery resets in-flight files (`status=2`) back to pending (`status=0`) on startup.
+- **Security & Network**: Unauthenticated HTTP REST and WebSocket interface. Binds to `HOST=0.0.0.0` by default; recommended production bind is `127.0.0.1` behind an authenticated reverse proxy.
 
-## Completed Changes (v2.2.0)
-- [x] SVG icons on buttons, labels, headings, stats, and dynamic job actions
-- [x] Dark theme — System (auto) / Light / Dark with header toggle
-- [x] `prefers-color-scheme` detection and live OS theme sync
-- [x] Rotating file logging (`logs/app.log`, `LOG_FILE`, `LOG_MAX_BYTES`, `LOG_BACKUP_COUNT`)
-- [x] CSS custom properties for full light/dark UI theming
-- [x] Shared `_head_common.html` and `_theme_init.html` partials
+## Implementation Gaps & Deviations
+See [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md) and [`docs/DOC_AUDIT.md`](docs/DOC_AUDIT.md) for full audit records.
+1. `maximum_compression` video profile specifies native `opus` audio codec, which fails on standard FFmpeg without `-strict -2`.
+2. `input_file_path` is `UNIQUE` in the database; re-running on the same input directory silently ignores existing paths unless history is cleared.
+3. `HW_ACCEL_MODE` config variable is parsed but not evaluated in code.
+4. `is_poison_file()` exists as a helper in `app/db.py` but is not integrated into `WorkerManager`.
+5. ImageMagick is not implemented in any form; Pillow is the sole image engine.
+6. File modification timestamps (`mtime`) are not preserved.
 
-## Completed Changes (v2.1.0)
-- [x] Separate `image_profile` and `video_profile` per job (UI, API, DB, manifest)
-- [x] Queue cancel/clear history, cancelled status, connection indicator
-- [x] Socket.IO threading + thread-safe emits, job size summaries
-
-## Modified Files (recent)
-
-| File | Change |
-|------|--------|
-| `VERSION` | Bumped to 2.4.0 |
-| `app/hardware.py` | **New** — hardware detection + recommendation engine |
-| `app/config.py` | Added `AUTO_SCALE`, `HW_ACCEL_MODE` settings |
-| `app/compression/settings.py` | Added HW codecs, NVENC presets, per-codec validation |
-| `app/workers/video_worker.py` | Platform-aware `_build_ffmpeg_cmd`, HW fallback, `_run_ffmpeg` |
-| `app/workers/manager.py` | Auto-scaling pool sizes from HardwareProfile |
-| `app/factory.py` | Calls `hardware.initialize()` at startup |
-| `app/routes.py` | Added `/api/v1/system` endpoint |
-| `tests/test_hardware.py` | **New** — 49 unit tests |
-| `CHANGELOG.md` | v2.4.0 entry |
-
-## API Endpoints (Current)
+## Verified API Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/` | Main UI |
-| GET | `/settings` | Settings reference |
-| GET | `/jobs/<id>` | Job detail page |
-| GET | `/version` | Version info (legacy) |
-| GET | `/api/v1/version` | Version info |
-| GET | `/api/v1/health` | Health check |
-| GET | `/api/v1/system` | Hardware profile & recommendations |
-| GET | `/api/v1/jobs` | List jobs |
-| POST | `/api/v1/jobs` | Create job (`image_profile`, `video_profile`) |
-| GET | `/api/v1/jobs/<id>` | Job details |
-| PUT | `/api/v1/jobs/<id>/pause` | Pause job |
-| PUT | `/api/v1/jobs/<id>/resume` | Resume job |
-| DELETE | `/api/v1/jobs/<id>` | Delete job |
-| GET | `/api/v1/jobs/<id>/files` | List job files |
-| POST | `/api/v1/jobs/<id>/retry_failed` | Retry failed files |
-| GET | `/api/v1/jobs/<id>/manifest` | Job manifest JSON |
-| GET | `/api/v1/files` | List all files |
-| GET | `/api/v1/files/<id>` | File details |
-| GET | `/api/v1/profiles` | Compression profiles |
-| GET | `/api/v1/profiles/<name>` | Profile details |
-| GET | `/api/v1/stats` | Global statistics |
-| POST | `/api/v1/clear_completed` | Delete completed files only |
-| POST | `/api/v1/cancel_queue` | Cancel pending + processing files |
-| POST | `/api/v1/clear_history` | Flush entire database |
-| GET | `/files` | Legacy file list |
-| GET | `/queue_counts` | Legacy queue counts |
-| POST | `/folder` | Legacy create job |
-| POST | `/clear_completed` | Legacy clear completed |
-| POST | `/cancel_queue` | Legacy cancel queue |
-| POST | `/clear_history` | Legacy clear history |
-
-**WebSocket:** `progress_update`, `queue_counts`, `queue_cancelled`, `history_cleared`, `connection_status`
-
-## UI Elements
-
-- **Theme toggle** — System / Light / Dark (header, all main pages)
-- **Icons** — buttons, labels, stats, job actions, connection indicator
-- **Image Profile** / **Video Profile** — separate dropdowns on new job form
-- **Connection indicator** — Online / Offline / Connecting (main page)
-- **Cancel Queue** / **Clear All History** — queue management buttons
-- Job cards with stacked profiles and size-change summary
-
-## Configuration (worker/resiliency)
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `WORKER_COUNT_IMAGES` | `4` | Parallel image worker processes (ProcessPool) |
-| `WORKER_COUNT_VIDEOS` | `2` | Parallel video worker threads |
-| `AUTO_SCALE` | `true` | Override static worker counts with hardware-detected recommendations |
-| `HW_ACCEL_MODE` | `auto` | Hardware acceleration: `auto`, `force`, or `off` |
-| `MAX_RETRIES` | `3` | Per-file retry limit before permanent failure |
-| `PROCESSING_TIMEOUT_MINUTES` | `30` | Watchdog terminates stuck workers after N minutes |
-| `MIN_FREE_DISK_MB` | `100` | Minimum free disk space before starting compression |
-
-## Configuration (logging)
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `LOG_FILE` | `logs/app.log` | Rotating log path (empty = console only) |
-| `LOG_MAX_BYTES` | `10485760` | Max size before rotation (10 MB) |
-| `LOG_BACKUP_COUNT` | `5` | Rotated files to keep |
-
-## Known Issues / TODOs
-
-- Image compression in process pool lacks granular progress callbacks (shows 0% → 100%)
-- `clear_history` removed count includes both jobs and files
-- Hardware acceleration settings UI page not yet implemented (profile visible via `/api/v1/system`)
-
-## How to Test
-
-```bash
-python run.py
-```
-
-1. **Theme** — click header toggle; cycle System → Light → Dark; verify UI colors.
-2. **Icons** — confirm buttons and section headings show icons.
-3. **Logging** — check `logs/app.log` for startup and job messages.
-4. **Connection indicator** — Online when connected; Offline when server stopped.
-5. **Version** — `curl http://localhost:5000/api/v1/version` → `2.3.0`
-6. **Timeout watchdog** — set `PROCESSING_TIMEOUT_MINUTES=1`, submit a job, kill ffmpeg manually; verify file requeues.
-7. **Disk space** — set `MIN_FREE_DISK_MB=999999` and submit a job; verify instant "Insufficient disk space" error.
-8. **Fair scheduling** — create two jobs simultaneously; verify files interleave from both jobs.
+| `GET` | `/healthz` | Web UI / load balancer health check |
+| `GET` | `/api/v1/health` | REST health check (returns worker and queue status) |
+| `GET` | `/api/v1/version` | Metadata, version, and repository info |
+| `GET` | `/version` | Legacy alias for `/api/v1/version` |
+| `GET` | `/api/v1/system` | Detected hardware profile and worker recommendations |
+| `GET` | `/api/v1/jobs` | Paginated list of jobs (`page`, `limit`) |
+| `POST` | `/api/v1/jobs` | Create compression job (scans input folder in background) |
+| `GET` | `/api/v1/jobs/<id>` | Job details and counts |
+| `PUT` | `/api/v1/jobs/<id>/pause` | Pause job |
+| `PUT` | `/api/v1/jobs/<id>/resume` | Resume job |
+| `DELETE` | `/api/v1/jobs/<id>` | Delete job and its file records |
+| `GET` | `/api/v1/jobs/<id>/files` | Paginated file records for job |
+| `POST` | `/api/v1/jobs/<id>/retry_failed` | Reset failed files to pending |
+| `GET` | `/api/v1/jobs/<id>/manifest` | Download JSON manifest |
+| `GET` | `/api/v1/files` | Paginated list of all files across all jobs |
+| `GET` | `/api/v1/files/<id>` | Individual file record details |
+| `GET` | `/api/v1/profiles` | Dictionary of all compression profiles and settings |
+| `GET` | `/api/v1/profiles/<name>` | Details for specific named profile |
+| `GET` | `/api/v1/stats` | Global processing statistics |
+| `POST` | `/api/v1/clear_completed` | Remove completed files from database |
+| `POST` | `/api/v1/cancel_queue` | Cancel pending/processing files and kill active subprocesses |
+| `POST` | `/api/v1/clear_history` | Flush all records from `jobs` and `files` tables |
