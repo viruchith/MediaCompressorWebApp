@@ -1035,3 +1035,47 @@ code {
 .tech-stack-list li {
     margin-bottom: 8px;
 }
+
+/* Breadcrumbs Navigation */
+.breadcrumb-nav {
+    margin-bottom: 20px;
+}
+
+.breadcrumbs {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    list-style: none;
+    padding: 8px 14px;
+    margin: 0;
+    background: var(--color-surface-muted);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    font-size: 0.9em;
+}
+
+.breadcrumbs li {
+    display: inline-flex;
+    align-items: center;
+}
+
+.breadcrumbs li:not(:last-child)::after {
+    content: "›";
+    margin-left: 8px;
+    color: var(--color-text-subtle);
+}
+
+.breadcrumbs a {
+    color: var(--color-link);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.breadcrumbs a:hover {
+    text-decoration: underline;
+}
+
+.breadcrumbs [aria-current="page"] {
+    color: var(--color-text-muted);
+    font-weight: 600;
+}

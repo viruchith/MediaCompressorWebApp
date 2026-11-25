@@ -11,12 +11,20 @@
         <div class="header-top">
             <h1>About <span class="app-version">v{{ app_version }}</span></h1>
             <div class="header-actions">
-                <a href="{{ url_for('web.help_page') }}" class="button-link secondary" target="_blank" rel="noopener">User Guide</a>
+                <a href="{{ url_for('web.index') }}" class="button-link secondary" aria-label="Dashboard">🏠 Dashboard</a>
+                <a href="{{ url_for('web.help_page') }}" class="button-link secondary" aria-label="User Guide">📖 Help</a>
                 <button type="button" id="theme-toggle" class="theme-toggle secondary" aria-label="Theme"></button>
             </div>
         </div>
         <p>Information about MediaCompressorWebApp, technology, and author</p>
     </header>
+
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb">
+        <ol class="breadcrumbs">
+            <li><a href="{{ url_for('web.index') }}">🏠 Dashboard</a></li>
+            <li aria-current="page">About</li>
+        </ol>
+    </nav>
 
     <div class="card about-card">
         <h2>{{ app_name }}</h2>

@@ -27,6 +27,8 @@ class TestHealthCheck:
         assert "User Guide & Help" in html
         assert "Quick 3-Step Guide" in html
         assert "Smart Social Media Handling" in html
+        assert "breadcrumb-nav" in html
+        assert "Dashboard" in html
 
     def test_about_page_returns_200(self, client):
         resp = client.get("/about")
@@ -35,6 +37,8 @@ class TestHealthCheck:
         assert "Viruchith Ganesan" in html
         assert "https://viruchith.com/" in html
         assert "GNU General Public License" in html
+        assert "breadcrumb-nav" in html
+        assert "Dashboard" in html
 
 
 class TestVersion:
