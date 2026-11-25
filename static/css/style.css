@@ -857,3 +857,181 @@ code {
     border-top: 1px solid var(--color-border);
     padding-top: 12px;
 }
+
+/* --- Header button links & Help/About pages --- */
+.button-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    font-size: 0.9em;
+    font-weight: 500;
+    text-decoration: none;
+    border-radius: 6px;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.button-link.secondary {
+    background: var(--color-surface);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+}
+
+.button-link.secondary:hover {
+    background: var(--color-surface-alt);
+    border-color: var(--color-border-strong);
+    text-decoration: none;
+}
+
+.button-link.primary {
+    background: var(--color-primary);
+    color: #fff;
+    border: 1px solid transparent;
+}
+
+.button-link.primary:hover {
+    background: var(--color-primary-hover);
+    text-decoration: none;
+}
+
+.help-section {
+    margin-bottom: 24px;
+}
+
+.help-section h2 {
+    margin-top: 0;
+    margin-bottom: 12px;
+    font-size: 1.3em;
+}
+
+.steps-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+    margin-top: 16px;
+}
+
+.step-card {
+    background: var(--color-surface-muted);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 18px;
+    position: relative;
+}
+
+.step-badge {
+    display: inline-block;
+    background: var(--color-primary);
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    font-weight: bold;
+    margin-bottom: 8px;
+}
+
+.step-card h3 {
+    margin: 8px 0;
+    font-size: 1.1em;
+}
+
+.step-card ul {
+    padding-left: 20px;
+    margin: 8px 0;
+}
+
+.step-card li {
+    margin-bottom: 6px;
+    font-size: 0.9em;
+}
+
+.feature-item {
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.feature-item:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.feature-item h3 {
+    margin: 0 0 6px 0;
+    font-size: 1.1em;
+}
+
+.faq-list details {
+    background: var(--color-surface-muted);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 10px;
+}
+
+.faq-list summary {
+    cursor: pointer;
+    font-size: 1em;
+}
+
+.faq-list p {
+    margin: 10px 0 0 0;
+    font-size: 0.95em;
+    color: var(--color-text-muted);
+}
+
+.about-card {
+    margin-bottom: 24px;
+}
+
+.about-card .tagline {
+    font-size: 1.1em;
+    color: var(--color-text-muted);
+    margin-top: -6px;
+    margin-bottom: 16px;
+}
+
+.about-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.about-table th, .about-table td {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.about-table th {
+    width: 140px;
+    color: var(--color-text-subtle);
+    font-weight: 500;
+}
+
+.author-profile {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.author-profile h3 {
+    margin: 0;
+    font-size: 1.2em;
+}
+
+.author-links {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+.tech-stack-list {
+    padding-left: 20px;
+    margin: 12px 0 0 0;
+}
+
+.tech-stack-list li {
+    margin-bottom: 8px;
+}

@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.5.0] - 2026-11-25
 
 ### Added
+- **User Guide & Help Page (`/help`)**:
+  - Added dedicated beginner-friendly user documentation page opening in a new tab via header navigation.
+  - Explains the 3-step compression workflow, profile differences, repeat run skipping, social media handling, and frequently asked questions for non-technical users.
+- **Application & Author About Page (`/about`)**:
+  - Added dedicated About page showcasing project metadata, open-source stack (FFmpeg, Pillow, Flask, SQLite), license, and author profile linking to Viruchith's personal site (`https://viruchith.com/`) and GitHub repository (`https://github.com/viruchith/MediaCompressorWebApp`).
 - **Interactive Directory Browser & Folder Picker**:
   - Added `GET /api/v1/browse` endpoint allowing clients to browse server-side directory structures with path resolution, parent directory navigation, and filtering of hidden/system folders.
   - Added "Browse…" buttons next to the Input Folder and Output Folder inputs on the web UI dashboard with an interactive directory picker modal.

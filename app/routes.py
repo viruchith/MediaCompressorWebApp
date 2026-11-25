@@ -43,6 +43,16 @@ def index():
     return render_template("index.html")
 
 
+@web_bp.route("/help")
+def help_page():
+    return render_template("help.html")
+
+
+@web_bp.route("/about")
+def about_page():
+    return render_template("about.html")
+
+
 @web_bp.route("/settings")
 def settings_page():
     return render_template("settings.html")

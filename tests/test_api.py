@@ -20,6 +20,22 @@ class TestHealthCheck:
         assert "workers" in data
         assert "queue" in data
 
+    def test_help_page_returns_200(self, client):
+        resp = client.get("/help")
+        assert resp.status_code == 200
+        html = resp.get_data(as_text=True)
+        assert "User Guide & Help" in html
+        assert "Quick 3-Step Guide" in html
+        assert "Smart Social Media Handling" in html
+
+    def test_about_page_returns_200(self, client):
+        resp = client.get("/about")
+        assert resp.status_code == 200
+        html = resp.get_data(as_text=True)
+        assert "Viruchith Ganesan" in html
+        assert "https://viruchith.com/" in html
+        assert "GNU General Public License" in html
+
 
 class TestVersion:
     def test_version_endpoint(self, client):

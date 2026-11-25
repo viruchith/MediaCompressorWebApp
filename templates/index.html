@@ -12,6 +12,8 @@
         <div class="header-top">
             <h1>Media Compressor <span class="app-version">v{{ app_version }}</span></h1>
             <div class="header-actions">
+                <a href="{{ url_for('web.help_page') }}" class="button-link secondary" target="_blank" rel="noopener" aria-label="Help & Guide">Help</a>
+                <a href="{{ url_for('web.about_page') }}" class="button-link secondary" target="_blank" rel="noopener" aria-label="About Application">About</a>
                 <button type="button" id="theme-toggle" class="theme-toggle secondary" aria-label="Theme"></button>
                 <span id="connection-indicator" class="connection-indicator connecting" role="status" aria-live="polite">
                     <span class="connection-label">Connecting…</span>

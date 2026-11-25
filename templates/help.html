@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Guide & Help — Media Compressor</title>
+    {% include '_head_common.html' %}
+</head>
+<body>
+    <header>
+        <div class="header-top">
+            <h1>User Guide & Help <span class="app-version">v{{ app_version }}</span></h1>
+            <div class="header-actions">
+                <a href="{{ url_for('web.about_page') }}" class="button-link secondary" target="_blank" rel="noopener">About</a>
+                <button type="button" id="theme-toggle" class="theme-toggle secondary" aria-label="Theme"></button>
+            </div>
+        </div>
+        <p>A simple, beginner-friendly guide to compressing your photos and videos</p>
+    </header>
+
+    <div class="card help-section">
+        <h2>👋 Welcome to Media Compressor</h2>
+        <p>
+            Media Compressor is an offline tool running locally on your computer that reduces the file size of your photo and video collections without uploading your private memories to any cloud service.
+        </p>
+    </div>
+
+    <div class="card help-section">
+        <h2>🚀 Quick 3-Step Guide</h2>
+        <div class="steps-container">
+            <div class="step-card">
+                <div class="step-badge">Step 1</div>
+                <h3>Choose Your Folders</h3>
+                <p>
+                    Click the <strong>Browse…</strong> button next to <strong>Input Folder Path</strong> to select the folder where your original photos and videos are stored (for example, your Syncthing sync folder, camera download folder, or an external hard drive).
+                </p>
+                <p>
+                    Click <strong>Browse…</strong> next to <strong>Output Folder Path</strong> to choose where you want your compressed files saved.
+                </p>
+            </div>
+
+            <div class="step-card">
+                <div class="step-badge">Step 2</div>
+                <h3>Pick Your Quality Presets</h3>
+                <p>
+                    Select how you want your images and videos handled:
+                </p>
+                <ul>
+                    <li><strong>Balanced (Recommended)</strong>: Excellent sweet spot. Cuts file sizes by ~50–80% with virtually indistinguishable visual difference on screens.</li>
+                    <li><strong>Archival Near-Lossless</strong>: Preserves maximum fine detail and colors. Ideal for permanent photo collections you may edit or print later.</li>
+                    <li><strong>Web / Mobile Friendly</strong>: Resizes huge 48MP photos and 4K videos down to 1080p for easy sharing with friends or storing on phones with limited storage.</li>
+                </ul>
+            </div>
+
+            <div class="step-card">
+                <div class="step-badge">Step 3</div>
+                <h3>Click "Start Compression Job"</h3>
+                <p>
+                    Watch real-time progress on your dashboard! Files are queued and processed automatically. When finished, a summary shows you how many gigabytes were saved.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="card help-section">
+        <h2>💡 Smart Features You'll Love</h2>
+
+        <div class="feature-item">
+            <h3>⚡ Repeat Runs & Syncthing Automatic Skipping</h3>
+            <p>
+                <strong>Never wait for old files to re-compress!</strong> If you run a job on a folder that has already been compressed before, the application automatically inspects the destination folder. If an image or video was already saved and is intact, it is skipped in a fraction of a second. Only newly added photos taken since your last sync are processed.
+            </p>
+        </div>
+
+        <div class="feature-item">
+            <h3>📱 Smart Social Media Handling (WhatsApp & Snapchat)</h3>
+            <p>
+                Apps like WhatsApp and Snapchat already compress media heavily before sending them to your phone. If you compress them again, it degrades the quality and wastes your computer's processing power.
+            </p>
+            <p>
+                The app automatically identifies these already-compressed social media files and <strong>copies them directly to your destination as-is</strong> so your final archive contains everything in one clean place without double-compression.
+            </p>
+            <p>
+                <em>Note: If someone sent you an original uncompressed photo via "WhatsApp Document", the app detects the camera quality and compresses it properly!</em>
+            </p>
+        </div>
+
+        <div class="feature-item">
+            <h3>🛡️ Automatic Crash Recovery</h3>
+            <p>
+                If your computer turns off, runs out of battery, or you close the app mid-job, don't worry! Any partially written files are safely discarded, and when you open the app again, interrupted files will cleanly restart without corrupting your files.
+            </p>
+        </div>
+
+        <div class="feature-item">
+            <h3>🗑️ Trash & Junk Ignored</h3>
+            <p>
+                Android phones often keep hidden <code>.trashed</code> files when you delete photos on your phone. Media Compressor automatically ignores trashed files, empty 0-byte files, and operating system junk (like <code>.DS_Store</code> or <code>Thumbs.db</code>).
+            </p>
+        </div>
+    </div>
+
+    <div class="card help-section">
+        <h2>❓ Frequently Asked Questions (FAQ)</h2>
+        <div class="faq-list">
+            <details>
+                <summary><strong>Will my original files ever be deleted or modified?</strong></summary>
+                <p><strong>Never.</strong> Media Compressor only reads from your Input Folder. It writes fresh compressed copies into your Output Folder. Your original files are never altered or deleted.</p>
+            </details>
+
+            <details>
+                <summary><strong>Are my photos or videos uploaded to the internet?</strong></summary>
+                <p><strong>No.</strong> The application runs 100% locally on your machine. No media files or filenames are ever sent to any remote server or cloud service.</p>
+            </details>
+
+            <details>
+                <summary><strong>What does "Preserve Metadata" mean?</strong></summary>
+                <p>When checked, camera details like date taken, camera model, lens info, and color profiles (EXIF) are preserved in your compressed images and videos.</p>
+            </details>
+        </div>
+    </div>
+
+    <div class="card help-section">
+        <h2>🔗 Need More Help?</h2>
+        <p>
+            Check out the <a href="{{ url_for('web.about_page') }}" target="_blank" rel="noopener">About Page</a> or view the source repository on <a href="{{ github_url }}" target="_blank" rel="noopener">GitHub</a>.
+        </p>
+    </div>
+
+    {% include '_footer.html' %}
+</body>
+</html>

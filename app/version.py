@@ -4,6 +4,7 @@ from pathlib import Path
 
 APP_NAME = "MediaCompressorWebApp"
 APP_AUTHOR = "Viruchith Ganesan"
+APP_AUTHOR_URL = "https://viruchith.com/"
 APP_COPYRIGHT_YEAR = "2025-2026"
 GITHUB_URL = "https://github.com/viruchith/MediaCompressorWebApp"
 
