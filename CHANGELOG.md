@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Android MediaStore & OS Junk Filtering**:
+  - Implemented `app/utils/scanner.py` to automatically ignore Android trashed files (`.trashed-*`), AppleDouble files (`._*`), and OS metadata files (`.DS_Store`, `Thumbs.db`, `desktop.ini`, `.nomedia`).
+  - Prunes junk directories (`.trashed`, `.Trash`, `.recycle`, `$RECYCLE.BIN`, `.thumbnails`, `.cache`) during background folder walk in `app/routes.py`.
+  - Added guards in `image_worker.py` and `video_worker.py` against zero-byte files and `.trashed` filenames.
+  - Added unit test suite in `tests/test_scanner.py` (82 total unit tests pass).
+
 ### Documentation & Verification Audit (2026-11-25)
 - Performed grounded code and runtime audit on macOS Apple Silicon M4 with Python 3.14.10 and FFmpeg 7.x.
 - Documented claim-by-claim verification matrix in [`docs/DOC_AUDIT.md`](docs/DOC_AUDIT.md).

@@ -183,6 +183,16 @@ def compress_video(
     automatically retries with libx265 software encoding.
     Returns (out_path, input_hash, output_hash, input_size, output_size, ratio).
     """
+    if not os.path.exists(input_path):
+        raise FileNotFoundError(f"Source file does not exist: {input_path}")
+
+    if os.path.getsize(input_path) == 0:
+        raise ValueError(f"Cannot compress 0-byte file: {input_path}")
+
+    filename = os.path.basename(input_path)
+    if filename.lower().startswith(".trashed"):
+        raise ValueError(f"Skipping Android trashed file: {filename}")
+
     if not is_video_file(input_path):
         raise ValueError(f"Not a valid video file: {input_path}")
 

@@ -10,6 +10,7 @@ from app import db
 from app.config import config
 from app.version import APP_AUTHOR, APP_COPYRIGHT_YEAR, APP_NAME, GITHUB_URL, VERSION
 from app.utils.manifest import build_job_manifest
+from app.utils.scanner import is_eligible_media_file, is_trashed_or_junk_file, should_ignore_dir
 
 logger = logging.getLogger(__name__)
 
@@ -205,8 +206,14 @@ def _create_job_from_data(data: dict):
     def _scan_and_enqueue():
         try:
             file_batch = []
-            for root, _, files in os.walk(input_folder):
+            for root, dirs, files in os.walk(input_folder):
+                # Prune ignored/junk directories in-place (e.g. .trashed, .Trash, .thumbnails)
+                dirs[:] = [d for d in dirs if not should_ignore_dir(d)]
+
                 for filename in files:
+                    if is_trashed_or_junk_file(filename):
+                        continue
+
                     input_path = os.path.join(root, filename)
                     ext = os.path.splitext(filename)[1][1:].lower()
                     if ext in config.SUPPORTED_IMAGE_EXTENSIONS:
@@ -215,6 +222,15 @@ def _create_job_from_data(data: dict):
                         ftype = "video"
                     else:
                         continue
+
+                    # Skip empty files early
+                    try:
+                        if os.path.getsize(input_path) == 0:
+                            logger.info("Skipping empty file: %s", input_path)
+                            continue
+                    except OSError:
+                        continue
+
                     relative = os.path.relpath(input_path, input_folder)
                     output_path = os.path.join(output_folder, relative)
                     file_batch.append((input_path, output_path, ftype))
