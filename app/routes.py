@@ -411,6 +411,53 @@ def global_stats():
     return jsonify(db.get_global_stats())
 
 
+@api_bp.route("/browse", methods=["GET"])
+def browse_directories():
+    """Browse server-side directories for the folder picker.
+
+    Returns the current directory, parent path, and accessible subdirectories.
+    """
+    req_path = request.args.get("path")
+    if not req_path or not req_path.strip():
+        # Default to user home directory or current working directory
+        target = os.path.expanduser("~")
+    else:
+        target = os.path.abspath(os.path.expanduser(req_path.strip()))
+
+    if not os.path.exists(target):
+        return error_response(f"Directory not found: {target}", "DIRECTORY_NOT_FOUND", 404)
+    if not os.path.isdir(target):
+        return error_response(f"Path is not a directory: {target}", "NOT_A_DIRECTORY", 400)
+
+    try:
+        entries = []
+        with os.scandir(target) as it:
+            for entry in it:
+                try:
+                    if entry.is_dir(follow_symlinks=False):
+                        # Filter hidden/system directories
+                        if entry.name.startswith(".") or entry.name in ("$RECYCLE.BIN", "System Volume Information"):
+                            continue
+                        entries.append(entry.name)
+                except (PermissionError, OSError):
+                    continue
+
+        entries.sort(key=lambda s: s.lower())
+        parent = os.path.dirname(target)
+        if parent == target:
+            parent = None  # Reached root
+
+        return jsonify({
+            "current": target,
+            "parent": parent,
+            "directories": entries,
+        })
+    except PermissionError:
+        return error_response(f"Permission denied: {target}", "PERMISSION_DENIED", 403)
+    except Exception as e:
+        return error_response(str(e), "BROWSE_ERROR", 500)
+
+
 @api_bp.route("/clear_completed", methods=["POST"])
 def clear_completed():
     deleted = db.clear_completed_files()

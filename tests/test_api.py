@@ -115,3 +115,35 @@ class TestQueueManagement:
         assert resp.status_code == 200
         data = resp.get_json()
         assert data["deleted"] == 0
+
+
+class TestDirectoryBrowser:
+    def test_browse_default(self, client):
+        resp = client.get("/api/v1/browse")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert "current" in data
+        assert "directories" in data
+        assert isinstance(data["directories"], list)
+
+    def test_browse_specific_path(self, client, tmp_path):
+        sub1 = tmp_path / "photos"
+        sub1.mkdir()
+        sub2 = tmp_path / "videos"
+        sub2.mkdir()
+        hidden = tmp_path / ".hidden"
+        hidden.mkdir()
+
+        resp = client.get(f"/api/v1/browse?path={tmp_path}")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["current"] == str(tmp_path)
+        assert "photos" in data["directories"]
+        assert "videos" in data["directories"]
+        assert ".hidden" not in data["directories"]
+
+    def test_browse_nonexistent_directory(self, client):
+        resp = client.get("/api/v1/browse?path=/path/that/does/not/exist_123456")
+        assert resp.status_code == 404
+        data = resp.get_json()
+        assert data["code"] == "DIRECTORY_NOT_FOUND"

@@ -45,6 +45,7 @@ See [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md) and [`docs/DOC_AUDIT.md`](doc
 | `GET` | `/api/v1/profiles` | Dictionary of all compression profiles and settings |
 | `GET` | `/api/v1/profiles/<name>` | Details for specific named profile |
 | `GET` | `/api/v1/stats` | Global processing statistics |
+| `GET` | `/api/v1/browse` | Server-side directory browsing for the folder picker modal |
 | `POST` | `/api/v1/clear_completed` | Remove completed files from database |
 | `POST` | `/api/v1/cancel_queue` | Cancel pending/processing files and kill active subprocesses |
 | `POST` | `/api/v1/clear_history` | Flush all records from `jobs` and `files` tables |

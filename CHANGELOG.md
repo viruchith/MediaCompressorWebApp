@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.5.0] - 2026-11-25
 
 ### Added
+- **Interactive Directory Browser & Folder Picker**:
+  - Added `GET /api/v1/browse` endpoint allowing clients to browse server-side directory structures with path resolution, parent directory navigation, and filtering of hidden/system folders.
+  - Added "Browse…" buttons next to the Input Folder and Output Folder inputs on the web UI dashboard with an interactive directory picker modal.
+  - Supports keyboard navigation, parent directory jumping ("▲ Up"), and selecting any existing directory to auto-populate form fields.
 - **Incremental Destination Verification (Stateless Sync)**:
   - Background scanner checks the actual output directory before enqueueing. If a compressed output exists, is intact, and has not been invalidated by newer source modification timestamps, the file is skipped automatically.
   - Safe against database deletion or job clearing: subsequent runs on the same folders only process newly added or uncompressed media.
