@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-11-25
+
 ### Added
 - **Incremental Destination Verification (Stateless Sync)**:
   - Background scanner checks the actual output directory before enqueueing. If a compressed output exists, is intact, and has not been invalidated by newer source modification timestamps, the file is skipped automatically.
@@ -20,13 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Implemented `app/utils/scanner.py` to automatically ignore Android trashed files (`.trashed-*`), AppleDouble files (`._*`), and OS metadata files (`.DS_Store`, `Thumbs.db`, `desktop.ini`, `.nomedia`).
   - Prunes junk directories (`.trashed`, `.Trash`, `.recycle`, `$RECYCLE.BIN`, `.thumbnails`, `.cache`) during background folder walk in `app/routes.py`.
   - Added guards in `image_worker.py` and `video_worker.py` against zero-byte files and `.trashed` filenames.
-  - Added unit test suite in `tests/test_scanner.py` (82 total unit tests pass).
+  - Added unit test suites `tests/test_scanner.py` and `tests/test_incremental_archive.py` (86 total unit tests pass).
 
 ### Documentation & Verification Audit (2026-11-25)
 - Performed grounded code and runtime audit on macOS Apple Silicon M4 with Python 3.14.10 and FFmpeg 7.x.
 - Documented claim-by-claim verification matrix in [`docs/DOC_AUDIT.md`](docs/DOC_AUDIT.md).
-- Added [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md) cataloging confirmed gaps (e.g., native Opus failure on standard FFmpeg, unauthenticated default network binding, unique input path constraints).
-- Rewrote `README.md` and `TECHNICAL.md` to reflect empirical behavior, exact measured profile outputs, and verified architectural details.
+- Added [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md) cataloging confirmed gaps (e.g., native Opus failure on standard FFmpeg, unauthenticated default network binding).
+- Rewrote `README.md` and `TECHNICAL.md` to reflect empirical behavior, exact measured profile outputs, and verified architectural details with Mermaid sequence and flow diagrams.
 - Clarified historical notes: removed fictional references to ImageMagick (Pillow is the sole image engine); noted that `HW_ACCEL_MODE` and `is_poison_file()` are defined in code but not yet evaluated during active queue dispatch.
 
 ## [2.4.0] - 2026-07-26
@@ -157,7 +159,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SQLite queue with real-time WebSocket progress updates
 - Basic web UI with folder input and queue statistics
 
-[Unreleased]: https://github.com/viruchith/MediaCompressorWebApp/compare/v2.4.0...HEAD
+[Unreleased]: https://github.com/viruchith/MediaCompressorWebApp/compare/v2.5.0...HEAD
+[2.5.0]: https://github.com/viruchith/MediaCompressorWebApp/compare/v2.4.0...v2.5.0
 [2.4.0]: https://github.com/viruchith/MediaCompressorWebApp/compare/v2.3.0...v2.4.0
 [2.3.0]: https://github.com/viruchith/MediaCompressorWebApp/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/viruchith/MediaCompressorWebApp/compare/v2.1.0...v2.2.0

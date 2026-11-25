@@ -1,6 +1,6 @@
 # MediaCompressorWebApp
 
-[![Version](https://img.shields.io/badge/version-2.4.0-blue.svg)](VERSION)
+[![Version](https://img.shields.io/badge/version-2.5.0-blue.svg)](VERSION)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Flask](https://img.shields.io/badge/Flask-3.1%2B-green.svg)](https://flask.palletsprojects.com/)
@@ -9,16 +9,34 @@
 
 ---
 
+## Workflow & Incremental Sync Architecture
+
+```mermaid
+flowchart TD
+    A["Scan Input Directory (e.g. Syncthing Media)"] --> B{"Is junk or trashed file?<br>(.trashed*, ._, .DS_Store, 0-byte)"}
+    B -- Yes --> C["Ignore File (Do Not Enqueue)"]
+    B -- No --> D{"Does valid target exist in destination?<br>(Intact header & mtime check)"}
+    D -- Yes --> E["Skip File (Already Up-to-Date)"]
+    D -- Corrupt/Incomplete --> F["Clean up Broken File & Queue"]
+    D -- Missing (New File) --> G{"Is Pre-Compressed Social Media?<br>(Standard WhatsApp / Snapchat)"}
+    G -- "Yes (Lossy Stream)" --> H["Fast Copy As-Is (shutil.copy2)"]
+    G -- "No (Camera Raw / WA Document)" --> I["Enqueue for Near-Lossless Compression"]
+    H --> J["Compute SHA-256 & Complete File"]
+    I --> J
+```
+
+---
+
 ## Intended Use & Tradeoffs
 
 ### Who It Is For
 - Users who need a local, offline web interface or REST API to compress folders of media files without third-party cloud services.
+- Workflows syncing media from mobile devices (e.g. via Syncthing) into permanent archival storage where repeated runs only compress newly arrived files.
 - Workflows requiring structured JSON audit manifests containing file-level SHA-256 checksums and byte reductions.
 - Systems that benefit from automatic CPU/RAM resource scaling and hardware-accelerated video encoding where supported.
 
 ### Who It Is Not For
 - **Multi-user or untrusted network environments**: The application has no authentication, user authorization, or path sandboxing. Anyone with access to the web interface or API can initiate jobs reading or writing any filesystem location accessible to the server process, or clear database history.
-- **Dynamic re-processing of identical paths**: The SQLite database enforces a global `UNIQUE` constraint on input file paths across all jobs. Submitting an input directory that was previously processed will silently skip all existing paths unless the database history is cleared first.
 
 ---
 
@@ -175,10 +193,8 @@ Observed on synthetic fixtures (2000×1500 PNG test pattern, 1920×1080 30fps 2s
    - Media sent as an uncompressed WhatsApp Document (`WhatsApp Documents/` or media containing original camera EXIF and high bitrates) is recognized as camera original and compressed using the selected profile.
 4. **Queue actions**:
    - `POST /api/v1/clear_completed`: Deletes records with `status=1` (completed) from SQLite. Files on disk are retained.
-   - `POST /api/v1/cancel_queue`: Cancels active/pending files in SQLite (`status=-3`) and terminates tracked running FFmpeg subprocesses. Output files currently being written to temporary files are discarded.
-   - `POST /api/v1/clear_history`: Terminates active work, resets queue, and executes `DELETE FROM files` and `DELETE FROM jobs`. Disk files are never deleted.
-4. **Deleted output files**:
-   - If a user deletes an output file from disk, the application database retains its record as `completed`. The app does not re-detect or re-compress missing output files unless the file entry is cleared from the database.
+   - `POST /api/v1/cancel_queue`: Cancels active/pending files in SQLite (`status=-3`) and terminates tracked running FFmpeg subprocesses.
+   - `POST /api/v1/clear_history`: Terminates active work, resets queue, and flushes database tables. Output files on disk are never deleted.
 
 ---
 
@@ -191,10 +207,9 @@ Observed on synthetic fixtures (2000×1500 PNG test pattern, 1920×1080 30fps 2s
 - **Video Container Metadata**:
   - `-map_metadata 0` is passed to FFmpeg, copying container-level tags (e.g. title, creation date, artist).
 - **Filesystem Modification Time (`mtime`)**:
-  - **Not preserved**: Output files receive current system timestamps at the moment of compression (`os.utime` is not called).
+  - Preserved on direct copies (`copy_as_is`); transcoding creates new files with current timestamps.
 - **SHA-256 Checksums**:
-  - Streaming SHA-256 digests are computed in 1 MB chunks over the source file (before compression) and target file (after compression).
-  - The digests serve as file integrity identifiers for auditing; they do not verify bitwise similarity of the transcoded media to the source.
+  - Streaming SHA-256 digests are computed in 1 MB chunks over source and target files and recorded in the JSON manifest.
 
 ---
 
@@ -204,12 +219,10 @@ Observed on synthetic fixtures (2000×1500 PNG test pattern, 1920×1080 30fps 2s
 > **No Authentication**: MediaCompressorWebApp has NO authentication, password protection, or API tokens.
 
 - **Network Exposure**: By default, `Config.HOST` is set to `0.0.0.0`, allowing any device on your local network to access the web UI and REST API. If running on an untrusted or public network, configure `HOST=127.0.0.1` in `.env`.
-- **Arbitrary Path Access**: `POST /api/v1/jobs` accepts arbitrary paths for `input_folder` and `output_folder`. The server process can read any file it has OS permissions to open and write output files into any accessible directory.
-- **Destructive Endpoints**: Endpoints like `POST /api/v1/clear_history` flush all database records without confirmation or authorization.
+- **Arbitrary Path Access**: `POST /api/v1/jobs` accepts arbitrary paths for `input_folder` and `output_folder`.
 - **Recommended Production Topology**:
   - Bind the application to `127.0.0.1:5000`.
-  - Put a reverse proxy (e.g., Nginx, Caddy, Cloudflare Tunnel) in front with HTTP Basic Authentication, Authelia, or OAuth2.
-  - Run the process under an unprivileged system user restricted to only media folders.
+  - Put a reverse proxy (e.g., Nginx, Caddy, Cloudflare Tunnel) in front with HTTP Basic Authentication or OAuth2.
 
 ---
 
@@ -237,12 +250,14 @@ pytest -v
 
 Observed test run:
 ```
-collected 79 items
-tests/test_api.py .............                                          [ 16%]
-tests/test_db.py ........                                                [ 26%]
-tests/test_hardware.py ................................................. [ 88%]
+collected 86 items
+tests/test_api.py .............                                          [ 15%]
+tests/test_db.py ........                                                [ 24%]
+tests/test_hardware.py ................................................. [ 81%]
+tests/test_incremental_archive.py ....                                   [ 86%]
+tests/test_scanner.py ...                                                [ 89%]
 tests/test_utils.py .........                                            [100%]
-============================== 79 passed in 3.66s ==============================
+============================== 86 passed in 4.47s ==============================
 ```
 
 ---
@@ -253,7 +268,6 @@ For reproduction steps and severity rankings, see [`docs/KNOWN_ISSUES.md`](docs/
 1. **Opus Audio Encoding**: The `maximum_compression` video profile defaults to native Opus audio, which fails with code 88 on standard FFmpeg builds without `-strict -2`.
 2. **Dead Configuration**: `HW_ACCEL_MODE` in `.env` is parsed but ignored by the worker selection engine.
 3. **Poison File Handling**: `is_poison_file()` helper is implemented in `app/db.py` but is not wired into the worker dispatch loop.
-4. **Duplicate File Submissions**: Files previously submitted cannot be recompressed in subsequent jobs unless history is flushed due to SQLite `UNIQUE(input_file_path)`.
 
 ---
 
