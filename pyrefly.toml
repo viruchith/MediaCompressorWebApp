@@ -1,0 +1,43 @@
+# Pyrefly Static Type Checker Configuration
+# Reference: https://pyrefly.org
+
+# Target Python version
+python-version = "3.10"
+
+# Files and directories to include in type checking
+project-includes = [
+    "app",
+    "tests",
+    "run.py",
+    "main.py",
+]
+
+# Excluded paths and temporary artifacts
+project-excludes = [
+    "**/.venv/**",
+    "**/__pycache__/**",
+    "**/.pytest_cache/**",
+    "**/logs/**",
+    "**/static/**",
+]
+
+# Respect .gitignore patterns automatically
+use-ignore-files = true
+
+# Local module search paths
+search-path = [
+    ".",
+    "app",
+]
+
+# Packages or libraries that may lack PEP 561 typed stubs
+ignore-missing-imports = [
+    "ffmpeg.*",
+    "pillow_heif.*",
+    "eventlet.*",
+    "flask_socketio.*",
+    "piexif.*",
+]
+
+[errors]
+missing-import = "warn"
